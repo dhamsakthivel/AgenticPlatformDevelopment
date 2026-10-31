@@ -1,0 +1,73 @@
+server:
+  port: 8080
+  tomcat:
+    max-http-form-post-size: 2MB
+    max-swallow-size: 2MB
+
+ake:
+  api-key: ${AKE_API_KEY:dev-ake-key}
+  agent:
+    base-url: ${AKE_AGENT_URL:http://localhost:8000}
+    api-key: ${AKE_AGENT_API_KEY:dev-ake-key}
+    mode: ${AKE_AGENT_MODE:http}
+  coach:
+    model: ${AKE_CHAT_MODEL:gpt-4o-mini}
+
+spring:
+  application:
+    name: ake-platform
+  profiles:
+    active: ${AKE_PROFILE:local}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+management:
+  health:
+    mongo:
+      enabled: false
+    db:
+      enabled: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: cloud
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ake}
+    username: ${SPRING_DATASOURCE_USERNAME:ake}
+    password: ${SPRING_DATASOURCE_PASSWORD:ake}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/ake}
