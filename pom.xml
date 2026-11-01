@@ -40,6 +40,9 @@
         <!-- exec:java seeds Azure DevOps and only belongs on platform-integrations. -->
         <exec.skip>true</exec.skip>
         <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
+        <json-schema-validator.version>1.5.6</json-schema-validator.version>
+        <surefire.excludedGroups>eval</surefire.excludedGroups>
+        <surefire.groups></surefire.groups>
     </properties>
 
     <dependencyManagement>
@@ -60,6 +63,11 @@
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
                 <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json-schema-validator.version}</version>
             </dependency>
 
             <dependency>
@@ -108,6 +116,15 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                    <groups>${surefire.groups}</groups>
+                    <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <executions>
                     <execution>
@@ -128,4 +145,14 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>eval</id>
+            <properties>
+                <surefire.excludedGroups>none</surefire.excludedGroups>
+                <surefire.groups>eval</surefire.groups>
+            </properties>
+        </profile>
+    </profiles>
 </project>

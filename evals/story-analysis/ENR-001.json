@@ -1,0 +1,28 @@
+{
+  "story": {
+    "id": "ENR-001",
+    "title": "Add a spouse as a dependent",
+    "description": "A benefits administrator submits an 834 maintenance type ADD for a spouse on an active subscriber. The enrollment system stores the dependent and keeps the subscriber coverage unchanged.",
+    "acceptanceCriteria": [
+      "Given an active subscriber, when an ADD is submitted with relationship SPOUSE, then the spouse is stored as a dependent.",
+      "The subscriber coverage effective date does not change.",
+      "The response outcome is ACCEPTED."
+    ]
+  },
+  "retrievedContext": [
+    {
+      "chunkId": "11111111-1111-1111-1111-111111111111",
+      "source": "knowledge-seed",
+      "title": "enrollment business rules",
+      "text": "Example Benefit Plan, invented for practice. An ADD for relationship SPOUSE is accepted when the subscriber is active, and the subscriber coverage date stays unchanged. A child aged 0 through 25 with relationship CHILD is accepted. Relationship CHILD at age 26 or older is rejected. TERM for the subscriber ends every dependent on the contract. A relationship other than SPOUSE or CHILD is rejected."
+    }
+  ],
+  "expected": {
+    "mustFindAmbiguitiesContaining": [],
+    "riskScoreRange": [
+      1,
+      3
+    ],
+    "minCriteria": 3
+  }
+}

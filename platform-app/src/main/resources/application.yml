@@ -74,8 +74,12 @@ qaagent:
     url: ${ENROLLMENT_APP_URL:http://localhost:8092}
   temporal:
     target: ${TEMPORAL_TARGET:localhost:7233}
+  prompts:
+    active:
+      story-analysis: v1
   llm:
     price-table: ${LLM_PRICE_TABLE:classpath:llm-prices.yml}
+    temperature: 0.2
 
 ---
 spring:

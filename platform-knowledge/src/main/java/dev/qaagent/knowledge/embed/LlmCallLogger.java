@@ -24,20 +24,30 @@ public class LlmCallLogger {
     }
 
     public void record(String model, int inputTokens, long latencyMs, BigDecimal costUsd, boolean success) {
+        record("embed", model, null, null, inputTokens, 0, latencyMs, costUsd, success);
+    }
+
+    public void record(String purpose, String model, String promptId, String promptVersion,
+                       int inputTokens, int outputTokens, long latencyMs, BigDecimal costUsd, boolean success) {
         String runIdText = MDC.get("runId");
         String stepIdText = MDC.get("stepId");
-        log.info("llm_call purpose=embed model={} inputTokens={} latencyMs={} success={} runId={} stepId={}",
-                model, inputTokens, latencyMs, success, runIdText, stepIdText);
+        log.info("llm_call purpose={} model={} prompt={}@{} inputTokens={} outputTokens={} latencyMs={} success={} runId={} stepId={}",
+                purpose, model, promptId, promptVersion, inputTokens, outputTokens, latencyMs, success, runIdText, stepIdText);
         jdbc.update("""
                 INSERT INTO llm_call
-                    (id, run_id, step_id, purpose, model, input_tokens, output_tokens, latency_ms, cost_usd, success, created_at)
-                VALUES (?, ?, ?, 'embed', ?, ?, 0, ?, ?, ?, ?)
+                    (id, run_id, step_id, purpose, model, prompt_id, prompt_version,
+                     input_tokens, output_tokens, latency_ms, cost_usd, success, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 UUID.randomUUID(),
                 parseUuid(runIdText),
                 parseUuid(stepIdText),
+                purpose,
                 model,
+                promptId,
+                promptVersion,
                 inputTokens,
+                outputTokens,
                 (int) Math.min(latencyMs, Integer.MAX_VALUE),
                 costUsd,
                 success,

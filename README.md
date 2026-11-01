@@ -2,7 +2,7 @@
 
 Agents that turn a user story into reviewed test cases and synthetic test data, on a made-up health-insurance enrollment domain. Nothing here is a real client system.
 
-This repository is at **Phase 2**. The app can load 18 made-up enrollment stories, talk to Azure DevOps or a small stand-in for qTest, and search a rule book of made-up enrollment notes. The screen still has four placeholder pages. No agent reads a story yet.
+This repository is at **Phase 3**. The app can load 18 made-up enrollment stories, talk to Azure DevOps or a small stand-in for qTest, search a rule book of made-up enrollment notes, and ask a model to read one story. The screen still has four placeholder pages. The analyst does not post the comment to Azure DevOps yet, and it does not write test cases.
 
 The full specification is [docs/SPEC.md](docs/SPEC.md). Build steps are in [docs/BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md).
 
@@ -131,6 +131,30 @@ curl.exe -s -F "file=@knowledge-seed/enrollment-business-rules.md;type=text/mark
 
 Search accepts `q`, and optional `source`, `app`, `module`, `profile`, and `limit`. Profiles named `story-analysis`, `test-design`, and `test-data` live in `platform-app/src/main/resources/application.yml`. They choose which kinds of notes each future agent should see. On the local profile, stories are the `ENR-00x` ids from `scripts/seed/stories.json`. A sandbox Azure DevOps project uses numeric work item ids, so a reindex there warns that `ENR-001` was not found unless you point the stories file at those numeric ids.
 
+## The story analyst
+
+The analyst reads one story plus the notes search finds, and writes a short review: a summary, which acceptance criteria a tester could actually check, what is still unclear, a risk score from 1 to 5, and the ids of the notes it used. Text from the notes is treated as data. An instruction hidden in a note does not change the analyst's job. Personal-looking values are swapped for tokens before the text is sent.
+
+The wording lives in `platform-agents/src/main/resources/prompts/story-analysis/v1.md`. The shape of the answer is `platform-core/src/main/resources/schemas/story-analysis-output.json`. If the answer does not match that shape, the analyst asks once more with the errors, then stops. If it cites a note that was not provided, it asks once more, then stops.
+
+The app still starts when `OPENAI_API_KEY` is empty. Asking the analyst to run then fails with a message to set the key and `OPENAI_CHAT_MODEL`. A priced example is `gpt-5-mini`. Prices for a few model names are in `platform-integrations/src/main/resources/llm-prices.yml`, taken from OpenAI's published token prices. Add a row if you choose a model that is not listed. Cost is recorded on each call.
+
+`./mvnw verify` does not call OpenAI. It uses a fake model. The real check is eight stories in `evals/story-analysis/`, including the three vague ones. It writes a report under `evals/reports/` and expects at least 7 of the 8 stories to pass.
+
+```bash
+export OPENAI_API_KEY="your-key"
+export OPENAI_CHAT_MODEL="gpt-5-mini"
+./scripts/run-evals.sh
+```
+
+```powershell
+$env:OPENAI_API_KEY = 'your-key'
+$env:OPENAI_CHAT_MODEL = 'gpt-5-mini'
+.\scripts\run-evals.ps1
+```
+
+Do not paste the key into a chat. The report lists pass or fail, the risk score, tokens, and cost for each story. There is no button for this yet. Posting the comment onto the Azure DevOps story comes with the workflow.
+
 ## The qTest stand-in
 
 `mock-qtest` is a tiny program that pretends to be qTest. It keeps test cases in memory and forgets them when you stop it. Start it in its own terminal, from the repository folder, before anything tries to save a test case:
@@ -173,8 +197,9 @@ The personal access token needs permission to read and write work items. The scr
 |---|---|
 | Java | 21 |
 | Spring Boot | 3.5.16 |
-| Spring AI BOM | 1.1.8 (embeddings; chat comes in the next phase) |
+| Spring AI BOM | 1.1.8 (embeddings and chat) |
 | PDFBox | 3.0.8 |
+| JSON Schema validator | 1.5.6 |
 | Temporal Java SDK | 1.40.0 |
 | springdoc OpenAPI | 2.10.0 |
 | Postgres image | `pgvector/pgvector:pg16` |
@@ -185,10 +210,9 @@ The personal access token needs permission to read and write work items. The scr
 
 ## Still to build
 
-1. The agent that reads a story and writes a short analysis.
-2. The agent that drafts test cases.
-3. The sample enrollment app and the agent that creates test data.
-4. The workflow that runs those steps, and stops for a person to approve the test cases.
-5. Live screens for runs, approvals, knowledge, and cost.
-6. Checks that score the agents.
-7. Optional: run the tests in a browser and file defects.
+1. The agent that drafts test cases.
+2. The sample enrollment app and the agent that creates test data.
+3. The workflow that runs those steps, posts the analysis comment, and stops for a person to approve the test cases.
+4. Live screens for runs, approvals, knowledge, and cost.
+5. The same kind of score check for the test-design agent.
+6. Optional: run the tests in a browser and file defects.
