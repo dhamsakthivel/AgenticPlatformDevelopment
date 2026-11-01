@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: qa-agent-platform
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: jdbc:postgresql://localhost:5432/qa_agent
+    username: qa_agent
+    password: qa_agent
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    path: /api/v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+qaagent:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    chat-model: ${OPENAI_CHAT_MODEL:}
+    chat-model-small: ${OPENAI_CHAT_MODEL_SMALL:}
+    embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    embedding-dimensions: ${EMBEDDING_DIMENSIONS:1536}
+  ado:
+    org-url: ${ADO_ORG_URL:}
+    project: ${ADO_PROJECT:}
+    pat: ${ADO_PAT:}
+    webhook-secret: ${ADO_WEBHOOK_SECRET:}
+  qtest:
+    base-url: ${QTEST_BASE_URL:http://localhost:8091}
+    token: ${QTEST_TOKEN:}
+    project-id: ${QTEST_PROJECT_ID:}
+  servicenow:
+    instance-url: ${SERVICENOW_INSTANCE_URL:}
+    user: ${SERVICENOW_USER:}
+    password: ${SERVICENOW_PASSWORD:}
+  enrollment:
+    url: ${ENROLLMENT_APP_URL:http://localhost:8092}
+  temporal:
+    target: ${TEMPORAL_TARGET:localhost:7233}
+  llm:
+    price-table: ${LLM_PRICE_TABLE:classpath:llm-prices.yml}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+---
+spring:
+  config:
+    activate:
+      on-profile: sandbox

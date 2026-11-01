@@ -1,0 +1,19 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Java
+target/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# OS / IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
