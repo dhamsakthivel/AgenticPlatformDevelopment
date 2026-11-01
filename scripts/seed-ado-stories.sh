@@ -7,4 +7,4 @@ if [[ -z "${ADO_ORG_URL:-}" || -z "${ADO_PROJECT:-}" || -z "${ADO_PAT:-}" ]]; th
   exit 1
 fi
 
-./mvnw -pl platform-integrations -am exec:java -Dexec.mainClass=dev.qaagent.integrations.ado.SeedAdoStories
+./mvnw -pl platform-integrations -am compile exec:java -Dexec.mainClass=dev.qaagent.integrations.ado.SeedAdoStories

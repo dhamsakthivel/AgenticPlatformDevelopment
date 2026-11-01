@@ -37,6 +37,9 @@
         <springdoc.version>2.10.0</springdoc.version>
         <!-- spring-boot:run is only meaningful on platform-app. -->
         <spring-boot.run.skip>true</spring-boot.run.skip>
+        <!-- exec:java seeds Azure DevOps and only belongs on platform-integrations. -->
+        <exec.skip>true</exec.skip>
+        <exec-maven-plugin.version>3.6.4</exec-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -93,6 +96,15 @@
     </dependencyManagement>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>${exec-maven-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

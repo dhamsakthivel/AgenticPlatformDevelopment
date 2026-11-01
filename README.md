@@ -127,7 +127,7 @@ $env:ADO_PAT = "<personal-access-token>"
 .\scripts\seed-ado-stories.ps1
 ```
 
-The personal access token needs permission to read and write work items. Each line printed is the story id and the Azure DevOps work item id. Switch the app to profile `sandbox` only when those three values are set. Profile `local` keeps using the file.
+The personal access token needs permission to read and write work items. The script compiles the integrations module, then creates the stories. Each line printed is the story id and the Azure DevOps work item id. Switch the app to profile `sandbox` only when those three values are set. Profile `local` keeps using the file.
 
 ## Versions pinned for this phase
 
