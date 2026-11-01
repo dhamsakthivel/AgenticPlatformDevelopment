@@ -40,6 +40,32 @@ qaagent:
     status-field-id: ${QTEST_STATUS_FIELD_ID:}
   seed:
     stories-path: ${STORIES_SEED_PATH:scripts/seed/stories.json}
+  knowledge:
+    seed-path: ${KNOWLEDGE_SEED_PATH:knowledge-seed}
+    stories-path: ${STORIES_SEED_PATH:scripts/seed/stories.json}
+    embedding-batch-size: 32
+    embedding-usd-per-million-tokens: 0.02
+  retrieval:
+    profiles:
+      story-analysis:
+        sources:
+          - knowledge-seed
+          - upload
+          - story
+        module: enrollment
+        top-k: 8
+      test-design:
+        sources:
+          - knowledge-seed
+          - upload
+          - test-case
+        module: enrollment
+        top-k: 8
+      test-data:
+        sources:
+          - knowledge-seed
+        module: enrollment
+        top-k: 6
   servicenow:
     instance-url: ${SERVICENOW_INSTANCE_URL:}
     user: ${SERVICENOW_USER:}

@@ -2,7 +2,7 @@
 
 Agents that turn a user story into reviewed test cases and synthetic test data, on a made-up health-insurance enrollment domain. Nothing here is a real client system.
 
-This repository is at **Phase 1**. The app can load 18 made-up enrollment stories, and it can talk to Azure DevOps or to a small stand-in for qTest. The screen still has four placeholder pages. No agent reads a story yet.
+This repository is at **Phase 2**. The app can load 18 made-up enrollment stories, talk to Azure DevOps or a small stand-in for qTest, and search a rule book of made-up enrollment notes. The screen still has four placeholder pages. No agent reads a story yet.
 
 The full specification is [docs/SPEC.md](docs/SPEC.md). Build steps are in [docs/BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md).
 
@@ -91,7 +91,45 @@ Copy `.env.example` to `.env` when you have an OpenAI key or sandbox credentials
 
 The `client` profile is reserved and refuses to start.
 
-After you pull this phase, stop the app if it is already running and start it again. The next start adds the story, test-case, and audit tables to the database you already have.
+After you pull this phase, stop the app if it is already running and start it again so it picks up the search code.
+
+## The rule book
+
+The rule book is a set of notes the later agents will search before they write anything. The notes are invented for a fake plan called Example Benefit Plan. They are not a real insurer’s rules, and they are not the licensed 834 guide.
+
+Four notes ship in `knowledge-seed/`: who can be enrolled, a short glossary, what an 834 file is in our own words, and how a test case should be written. A reindex also files each local story, and any test case the qTest stand-in currently has.
+
+Personal-looking values are swapped for tokens such as `[EMAIL]` and `[SSN]` before anything is saved or embedded. A business rule such as “a child under 26” or “effective date 2026-01-01” is left as written.
+
+With no `OPENAI_API_KEY`, search still works. The app builds a stand-in vector named `local-token-hash` from the words in the text, so shared words land near each other. Rankings will not match a real OpenAI embedding. Set `OPENAI_API_KEY` and restart to use `text-embedding-3-small` (1,536 numbers per chunk).
+
+Postgres from Compose has to be running. From the repository folder, with the app already started on port 8080:
+
+```bash
+curl -s -X POST http://localhost:8080/api/knowledge/reindex
+curl -s "http://localhost:8080/api/knowledge/search?q=spouse%20dependent&module=enrollment"
+```
+
+```powershell
+curl.exe -s -X POST http://localhost:8080/api/knowledge/reindex
+curl.exe -s "http://localhost:8080/api/knowledge/search?q=spouse%20dependent&module=enrollment"
+```
+
+The reindex reply counts what was filed, what was skipped because it had not changed, and any warnings. A second reindex should skip the same notes. If the qTest stand-in is not running, reindex still files the notes and the stories, and adds a warning about test cases.
+
+To file one note of your own:
+
+```bash
+curl -s -F "file=@knowledge-seed/enrollment-business-rules.md;type=text/markdown" \
+  http://localhost:8080/api/knowledge/documents
+```
+
+```powershell
+curl.exe -s -F "file=@knowledge-seed/enrollment-business-rules.md;type=text/markdown" `
+  http://localhost:8080/api/knowledge/documents
+```
+
+Search accepts `q`, and optional `source`, `app`, `module`, `profile`, and `limit`. Profiles named `story-analysis`, `test-design`, and `test-data` live in `platform-app/src/main/resources/application.yml`. They choose which kinds of notes each future agent should see. On the local profile, stories are the `ENR-00x` ids from `scripts/seed/stories.json`. A sandbox Azure DevOps project uses numeric work item ids, so a reindex there warns that `ENR-001` was not found unless you point the stories file at those numeric ids.
 
 ## The qTest stand-in
 
@@ -135,7 +173,8 @@ The personal access token needs permission to read and write work items. The scr
 |---|---|
 | Java | 21 |
 | Spring Boot | 3.5.16 |
-| Spring AI BOM | 1.1.8 (declared, not called yet) |
+| Spring AI BOM | 1.1.8 (embeddings; chat comes in the next phase) |
+| PDFBox | 3.0.8 |
 | Temporal Java SDK | 1.40.0 |
 | springdoc OpenAPI | 2.10.0 |
 | Postgres image | `pgvector/pgvector:pg16` |
@@ -146,11 +185,10 @@ The personal access token needs permission to read and write work items. The scr
 
 ## Still to build
 
-1. Document upload and search.
-2. The agent that reads a story.
-3. The agent that drafts test cases.
-4. The sample enrollment app and the agent that creates test data.
-5. The workflow that runs those steps, and stops for a person to approve the test cases.
-6. Live screens for runs, approvals, knowledge, and cost.
-7. Checks that score the agents.
-8. Optional: run the tests in a browser and file defects.
+1. The agent that reads a story and writes a short analysis.
+2. The agent that drafts test cases.
+3. The sample enrollment app and the agent that creates test data.
+4. The workflow that runs those steps, and stops for a person to approve the test cases.
+5. Live screens for runs, approvals, knowledge, and cost.
+6. Checks that score the agents.
+7. Optional: run the tests in a browser and file defects.

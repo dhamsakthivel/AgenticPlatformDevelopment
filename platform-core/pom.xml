@@ -13,4 +13,12 @@
     <artifactId>platform-core</artifactId>
     <name>platform-core</name>
     <description>Contracts, ports, JSON schemas, and the PHI redactor.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
