@@ -15,7 +15,15 @@ The full specification is [docs/SPEC.md](docs/SPEC.md). Build steps are in [docs
 
 ## Run it
 
-From the repository root:
+Open a terminal **inside this repository**, not in your home folder. The prompt should end with the project name, for example `AgenticPlatformDevelopment`. If you do not have the code yet:
+
+```bash
+git clone https://github.com/dhamsakthivel/AgenticPlatformDevelopment.git
+cd AgenticPlatformDevelopment
+git checkout cursor/qa-agent-platform-phase-0-192c
+```
+
+### Mac or Linux
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d
@@ -23,10 +31,29 @@ docker compose -f infra/docker-compose.yml up -d
 ./mvnw -pl platform-app -am spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-In a second terminal:
+In a second terminal, from the same repository:
 
 ```bash
 cd frontend
+npm install
+npm run dev
+```
+
+### Windows PowerShell
+
+PowerShell does not run `./mvnw`. Use `.\mvnw.cmd`, and quote the `-D` setting so PowerShell does not eat it. Docker Desktop must be running.
+
+```powershell
+cd $HOME\AgenticPlatformDevelopment
+docker compose -f infra/docker-compose.yml up -d
+.\mvnw.cmd verify
+.\mvnw.cmd -pl platform-app -am spring-boot:run "-Dspring-boot.run.profiles=local"
+```
+
+In a second PowerShell window:
+
+```powershell
+cd $HOME\AgenticPlatformDevelopment\frontend
 npm install
 npm run dev
 ```
