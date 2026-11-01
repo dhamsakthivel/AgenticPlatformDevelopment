@@ -58,6 +58,19 @@ npm install
 npm run dev
 ```
 
+If Maven stops with `release version 21 not supported`, the PC is using an older Java. Install Java 21, then open a **new** PowerShell window and run the commands again:
+
+```powershell
+winget install EclipseAdoptium.Temurin.21.JDK
+```
+
+Close PowerShell, open it again, and check that both lines say version 21:
+
+```powershell
+java -version
+javac -version
+```
+
 Then open:
 
 - App: http://localhost:5173
