@@ -13,4 +13,29 @@
     <artifactId>mock-qtest</artifactId>
     <name>mock-qtest</name>
     <description>Stand-in for the qTest REST subset used in the local profile.</description>
+
+    <properties>
+        <spring-boot.run.skip>false</spring-boot.run.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -2,7 +2,7 @@
 
 Agents that turn a user story into reviewed test cases and synthetic test data, on a made-up health-insurance enrollment domain. Nothing here is a real client system.
 
-This repository is at **Phase 0**: the empty frame. The app starts, the database tools are described, and the screen has four placeholder pages. No agent reads a story yet.
+This repository is at **Phase 1**. The app can load 18 made-up enrollment stories, and it can talk to Azure DevOps or to a small stand-in for qTest. The screen still has four placeholder pages. No agent reads a story yet.
 
 The full specification is [docs/SPEC.md](docs/SPEC.md). Build steps are in [docs/BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md).
 
@@ -85,9 +85,49 @@ Then open:
 
 `npm run build` in `frontend/` typechecks and produces the production bundle.
 
-Copy `.env.example` to `.env` when you have an OpenAI key or sandbox credentials. The `local` profile does not need those keys yet, because no agent calls a model in this phase. Postgres from Compose uses database `qa_agent`, user `qa_agent`, password `qa_agent` on port 5432. Redis is on port 6379.
+`./mvnw verify` (or `.\mvnw.cmd verify`) now starts a temporary Postgres database inside Docker, so the Docker engine has to be running for the build as well as for the app. That check proves the new tables and the vector indexes are created.
+
+Copy `.env.example` to `.env` when you have an OpenAI key or sandbox credentials. The `local` profile does not need those keys. Postgres from Compose uses database `qa_agent`, user `qa_agent`, password `qa_agent` on port 5432. Redis is on port 6379.
 
 The `client` profile is reserved and refuses to start.
+
+After you pull this phase, stop the app if it is already running and start it again. The next start adds the story, test-case, and audit tables to the database you already have.
+
+## The qTest stand-in
+
+`mock-qtest` is a tiny program that pretends to be qTest. It keeps test cases in memory and forgets them when you stop it. Start it in its own terminal, from the repository folder, before anything tries to save a test case:
+
+```bash
+./mvnw -pl mock-qtest spring-boot:run
+```
+
+```powershell
+.\mvnw.cmd -pl mock-qtest spring-boot:run
+```
+
+It listens on http://localhost:8091. The local app already points `QTEST_BASE_URL` there, and it uses project `1` and module `1` unless you set `QTEST_PROJECT_ID` and `QTEST_MODULE_ID`. Leave `QTEST_TOKEN` empty for the stand-in. A real qTest trial needs the token from that project's API page, and `QTEST_MODULE_ID` must be the numeric module id.
+
+## Seed stories into Azure DevOps
+
+The same 18 stories live in `scripts/seed/stories.json`. On a laptop, profile `local` reads that file. It does not call Azure DevOps.
+
+To copy them into a sandbox Azure DevOps project, create a project that uses the **Agile** process. That process has a work item type named User Story. Set three values in the terminal, then run the script from the repository folder. A story whose title is already in the project is left alone, so you can run the script again.
+
+```bash
+export ADO_ORG_URL="https://dev.azure.com/<org>"
+export ADO_PROJECT="<project>"
+export ADO_PAT="<personal-access-token>"
+./scripts/seed-ado-stories.sh
+```
+
+```powershell
+$env:ADO_ORG_URL = "https://dev.azure.com/<org>"
+$env:ADO_PROJECT = "<project>"
+$env:ADO_PAT = "<personal-access-token>"
+.\scripts\seed-ado-stories.ps1
+```
+
+The personal access token needs permission to read and write work items. Each line printed is the story id and the Azure DevOps work item id. Switch the app to profile `sandbox` only when those three values are set. Profile `local` keeps using the file.
 
 ## Versions pinned for this phase
 
@@ -106,12 +146,11 @@ The `client` profile is reserved and refuses to start.
 
 ## Still to build
 
-1. Story records, database tables, and the Azure DevOps / qTest connections (mocked on a laptop).
-2. Document upload and search.
-3. The agent that reads a story.
-4. The agent that drafts test cases.
-5. The sample enrollment app and the agent that creates test data.
-6. The workflow that runs those steps, and stops for a person to approve the test cases.
-7. Live screens for runs, approvals, knowledge, and cost.
-8. Checks that score the agents.
-9. Optional: run the tests in a browser and file defects.
+1. Document upload and search.
+2. The agent that reads a story.
+3. The agent that drafts test cases.
+4. The sample enrollment app and the agent that creates test data.
+5. The workflow that runs those steps, and stops for a person to approve the test cases.
+6. Live screens for runs, approvals, knowledge, and cost.
+7. Checks that score the agents.
+8. Optional: run the tests in a browser and file defects.

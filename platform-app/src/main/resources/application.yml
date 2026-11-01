@@ -35,7 +35,11 @@ qaagent:
   qtest:
     base-url: ${QTEST_BASE_URL:http://localhost:8091}
     token: ${QTEST_TOKEN:}
-    project-id: ${QTEST_PROJECT_ID:}
+    project-id: ${QTEST_PROJECT_ID:1}
+    module-id: ${QTEST_MODULE_ID:1}
+    status-field-id: ${QTEST_STATUS_FIELD_ID:}
+  seed:
+    stories-path: ${STORIES_SEED_PATH:scripts/seed/stories.json}
   servicenow:
     instance-url: ${SERVICENOW_INSTANCE_URL:}
     user: ${SERVICENOW_USER:}
