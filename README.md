@@ -43,12 +43,17 @@ npm run dev
 
 PowerShell does not run `./mvnw`. Use `.\mvnw.cmd`, and quote the `-D` setting so PowerShell does not eat it. Docker Desktop must be running.
 
+Start Docker Desktop, then start the database before the app. `Connection to localhost:5432 refused` means Postgres is not running yet.
+
 ```powershell
 cd $HOME\AgenticPlatformDevelopment
 docker compose -f infra/docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml ps
 .\mvnw.cmd verify
 .\mvnw.cmd -pl platform-app -am spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
+
+`docker compose ps` should show the postgres service as `healthy` before you start the app.
 
 In a second PowerShell window:
 
