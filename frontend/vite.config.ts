@@ -13,6 +13,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
+    allowedHosts: [".cursorvm.com", ".agent.cvm.dev"],
     proxy: {
       "/api": {
         target: "http://localhost:8080",
