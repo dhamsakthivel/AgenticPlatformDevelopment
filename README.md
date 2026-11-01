@@ -43,7 +43,7 @@ npm run dev
 
 PowerShell does not run `./mvnw`. Use `.\mvnw.cmd`, and quote the `-D` setting so PowerShell does not eat it. Docker Desktop must be running.
 
-Start Docker Desktop, then start the database before the app. `Connection to localhost:5432 refused` means Postgres is not running yet.
+Start the Docker Desktop app and wait until it says the engine is running. `npipe://./pipe/dockerDesktopLinuxEngine` and `The system cannot find the file specified` mean the Docker program is installed but the engine is switched off, so Postgres never starts and the app then reports `Connection to localhost:5432 refused`.
 
 ```powershell
 cd $HOME\AgenticPlatformDevelopment
