@@ -137,7 +137,7 @@ The analyst reads one story plus the notes search finds, and writes a short revi
 
 The wording lives in `platform-agents/src/main/resources/prompts/story-analysis/v1.md`. The shape of the answer is `platform-core/src/main/resources/schemas/story-analysis-output.json`. If the answer does not match that shape, the analyst asks once more with the errors, then stops. If it cites a note that was not provided, it asks once more, then stops.
 
-The app still starts when `OPENAI_API_KEY` is empty. Asking the analyst to run then fails with a message to set the key and `OPENAI_CHAT_MODEL`. A priced example is `gpt-5-mini`. Prices for a few model names are in `platform-integrations/src/main/resources/llm-prices.yml`, taken from OpenAI's published token prices. Add a row if you choose a model that is not listed. Cost is recorded on each call.
+The app still starts when `OPENAI_API_KEY` is empty. Asking the analyst to run then fails with a message to set the key and `OPENAI_CHAT_MODEL`. A priced example is `gpt-5-mini`. That model rejects every temperature except 1, so the client sends 1 for it and for the o-series models. Other models still receive 0.2. Prices for a few model names are in `platform-integrations/src/main/resources/llm-prices.yml`, taken from OpenAI's published token prices. Add a row if you choose a model that is not listed. Cost is recorded on each call.
 
 `./mvnw verify` does not call OpenAI. It uses a fake model. The real check is eight stories in `evals/story-analysis/`, including the three vague ones. It writes a report under `evals/reports/` and expects at least 7 of the 8 stories to pass.
 

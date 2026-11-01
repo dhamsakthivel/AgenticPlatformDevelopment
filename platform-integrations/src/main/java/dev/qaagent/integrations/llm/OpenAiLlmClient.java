@@ -17,6 +17,7 @@ import org.springframework.ai.openai.api.ResponseFormat;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 
 public final class OpenAiLlmClient implements LlmClient {
 
@@ -39,6 +40,32 @@ public final class OpenAiLlmClient implements LlmClient {
         this.calls = calls;
         this.prices = prices;
         this.schemas = new JsonSchemaChecker(json);
+        if (locksTemperature(model)) {
+            log.info("{} only accepts temperature 1, so the configured value {} is replaced.", model, temperature);
+        }
+    }
+
+    /**
+     * Some models, including gpt-5-mini, reject every temperature except 1.
+     * Spring AI otherwise sends its own default of 0.7, which those models also reject.
+     */
+    static boolean locksTemperature(String model) {
+        if (model == null || model.isBlank()) {
+            return false;
+        }
+        String name = model.toLowerCase(Locale.ROOT);
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0) {
+            name = name.substring(slash + 1);
+        }
+        int colon = name.lastIndexOf(':');
+        if (colon >= 0) {
+            name = name.substring(colon + 1);
+        }
+        return name.startsWith("gpt-5")
+                || name.startsWith("o1")
+                || name.startsWith("o3")
+                || name.startsWith("o4");
     }
 
     @Override
@@ -70,14 +97,13 @@ public final class OpenAiLlmClient implements LlmClient {
     private Attempt call(LlmRequest request, String content) {
         long started = System.nanoTime();
         try {
-            OpenAiChatOptions options = OpenAiChatOptions.builder()
+            OpenAiChatOptions.Builder options = OpenAiChatOptions.builder()
                     .model(model)
-                    .temperature(temperature)
-                    .responseFormat(ResponseFormat.builder().type(ResponseFormat.Type.JSON_OBJECT).build())
-                    .build();
+                    .responseFormat(ResponseFormat.builder().type(ResponseFormat.Type.JSON_OBJECT).build());
+            options.temperature(locksTemperature(model) ? 1.0 : temperature);
             ChatResponse response = chatClient.prompt()
                     .user(content)
-                    .options(options)
+                    .options(options.build())
                     .call()
                     .chatResponse();
             long latencyMs = (System.nanoTime() - started) / 1_000_000;

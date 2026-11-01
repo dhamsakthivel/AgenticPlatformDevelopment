@@ -79,6 +79,7 @@ qaagent:
       story-analysis: v1
   llm:
     price-table: ${LLM_PRICE_TABLE:classpath:llm-prices.yml}
+    # gpt-5 and o-series models reject every value except 1, so the client sends 1 for them.
     temperature: 0.2
 
 ---

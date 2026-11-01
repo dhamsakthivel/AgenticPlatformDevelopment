@@ -141,6 +141,41 @@ class OpenAiLlmClientTest {
     }
 
     @Test
+    void sendsTheConfiguredTemperatureWhenTheModelAllowsIt() throws Exception {
+        wireMock.stubFor(post(urlPathEqualTo("/v1/chat/completions"))
+                .willReturn(aResponse().withHeader("Content-Type", "application/json")
+                        .withBody(completion(validAnalysis()))));
+
+        client.structured(new LlmRequest("story-analysis", "story-analysis", "v1", "Return JSON.", ""),
+                StoryAnalysisOutput.class, "story-analysis-output");
+
+        wireMock.verify(postRequestedFor(urlPathEqualTo("/v1/chat/completions"))
+                .withRequestBody(containing("\"temperature\":0.2")));
+    }
+
+    @Test
+    void sendsTemperatureOneWhenTheModelOnlyAcceptsTheDefault() throws Exception {
+        wireMock.stubFor(post(urlPathEqualTo("/v1/chat/completions"))
+                .willReturn(aResponse().withHeader("Content-Type", "application/json")
+                        .withBody(completion(validAnalysis()))));
+        OpenAiLlmClient locked = new OpenAiLlmClient(ChatClient.create(OpenAiChatModel.builder()
+                .openAiApi(OpenAiClients.api(wireMock.baseUrl(), "test-key"))
+                .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
+                .build()), "gpt-5-mini", 0.2, new PhiRedactor(), new LlmCallLogger(jdbc),
+                LlmPrices.load("classpath:llm-prices.yml"), new ObjectMapper());
+
+        locked.structured(new LlmRequest("story-analysis", "story-analysis", "v1", "Return JSON.", ""),
+                StoryAnalysisOutput.class, "story-analysis-output");
+
+        wireMock.verify(postRequestedFor(urlPathEqualTo("/v1/chat/completions"))
+                .withRequestBody(containing("\"model\":\"gpt-5-mini\""))
+                .withRequestBody(containing("\"temperature\":1.0")));
+        assertThat(OpenAiLlmClient.locksTemperature("openai/gpt-5")).isTrue();
+        assertThat(OpenAiLlmClient.locksTemperature("o4-mini")).isTrue();
+        assertThat(OpenAiLlmClient.locksTemperature("gpt-4.1-mini")).isFalse();
+    }
+
+    @Test
     void unknownModelCostsZero() {
         assertThat(LlmPrices.load("classpath:llm-prices.yml").cost("missing-model", 10, 10))
                 .isEqualByComparingTo(BigDecimal.ZERO);
