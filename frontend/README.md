@@ -1,6 +1,6 @@
-# React + TypeScript + Vite + shadcn/ui
+# QA Agentic Platform UI
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+React + TypeScript + Vite + shadcn/ui. How to run the whole platform is in the repository [README](../README.md). The pages are placeholders in this phase.
 
 ## Adding components
 
