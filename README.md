@@ -2,7 +2,7 @@
 
 Agents that turn a user story into reviewed test cases and synthetic test data, on a made-up health-insurance enrollment domain. Nothing here is a real client system.
 
-This repository is at **Phase 4**. The app can load 18 made-up enrollment stories, talk to Azure DevOps or a small stand-in for qTest, search a rule book of made-up enrollment notes, and run one story through the analyst. `POST /api/runs` reads the story, searches the rule book, writes the review, and saves the comment. The screen still has four placeholder pages. The analyst does not draft test cases yet.
+This repository is at **Phase 5**. The app can load 18 made-up enrollment stories, talk to Azure DevOps or a small stand-in for qTest, search a rule book of made-up enrollment notes, and run one story through the analyst and the test designer. `POST /api/runs` reads the story, writes the review, saves the comment, and stores draft test cases. A person approves, rejects, or edits those drafts with `POST /api/approvals/{id}/decision`. The screen still has four placeholder pages. Approved cases do not get synthetic enrollment files yet.
 
 The full specification is [docs/SPEC.md](docs/SPEC.md). Build steps are in [docs/BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md).
 
@@ -162,18 +162,37 @@ Docker Desktop has to be running, including Postgres and the Temporal dev server
 ```bash
 curl -s -X POST http://localhost:8080/api/runs \
   -H 'Content-Type: application/json' \
-  -d '{"storyId":"ENR-001","triggeredBy":"sam"}'
+  -d '{"storyId":"ENR-002","triggeredBy":"sam"}'
 ```
 
 ```powershell
-curl.exe -s -X POST http://localhost:8080/api/runs `
-  -H "Content-Type: application/json" `
-  -d "{\"storyId\":\"ENR-001\",\"triggeredBy\":\"sam\"}"
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/runs -ContentType "application/json" -Body '{"storyId":"ENR-002","triggeredBy":"sam"}'
 ```
 
-The reply is the run id. `GET /api/runs/{id}` returns the steps. After the review is written the status is `WAITING_FOR_APPROVAL` for up to 7 days. The comment text is on the `postStoryComment` step. On the local profile the same text is stored in `audit_event`. On the sandbox profile it is also posted on the Azure DevOps work item.
+The reply is the run id. `GET /api/runs/{id}` returns the steps. After the drafts are saved the status is `WAITING_FOR_APPROVAL` for up to 7 days. The comment text is on the `postStoryComment` step. The drafted cases are on the run and in the local qTest stand-in. On the local profile the comment is stored in `audit_event`. On the sandbox profile it is also posted on the Azure DevOps work item.
 
-A second start for a story that is already running returns 409. The Temporal UI at http://localhost:8233 shows the same run.
+A second start for a story that is already running returns 409. The Temporal UI at http://localhost:8233 shows the same run. A run started before the test designer was added stays on the comment step. Start a different story, such as `ENR-002`, to draft test cases.
+
+The local qTest stand-in has to be running before the drafts can be saved:
+
+```powershell
+.\mvnw.cmd -pl mock-qtest spring-boot:run
+```
+
+When the run status is `WAITING_FOR_APPROVAL`, list the drafts and send a decision for every key. `APPROVE` and `REJECT` need no extra text. `EDIT` includes the replacement case. The run then finishes. The drafts stay in qTest. Approved ones are marked `APPROVED`. Rejected ones are marked `REJECTED`.
+
+```powershell
+$pending = Invoke-RestMethod "http://localhost:8080/api/approvals?status=PENDING"
+$pending | ConvertTo-Json -Depth 6
+$body = @{
+  decidedBy = "sam"
+  decisions = @(
+    @{ key = "TC1"; action = "APPROVE" },
+    @{ key = "TC2"; action = "REJECT" }
+  )
+} | ConvertTo-Json -Depth 6
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/approvals/$($pending[0].id)/decision" -ContentType "application/json" -Body $body
+```
 
 To start from Azure DevOps, set `ADO_WEBHOOK_SECRET` and send that value in the `X-ADO-Webhook-Secret` header to `POST /api/webhooks/ado`. The hook starts a run only when the work item state is Ready. A story that is already running is left alone.
 
@@ -232,9 +251,6 @@ The personal access token needs permission to read and write work items. The scr
 
 ## Still to build
 
-1. The agent that drafts test cases.
-2. The sample enrollment app and the agent that creates test data.
-3. Draft test cases, the approval decision that resumes the run, and synthetic enrollment data. The run already pauses after the story comment so that decision can be signalled.
-4. Live screens for runs, approvals, knowledge, and cost.
-5. The same kind of score check for the test-design agent.
-6. Optional: run the tests in a browser and file defects.
+1. The sample enrollment app and the agent that creates synthetic 834 files for approved cases.
+2. Live screens for runs, approvals, knowledge, and cost.
+3. Optional: run the tests in a browser and file defects.

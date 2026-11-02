@@ -1,7 +1,10 @@
 package dev.qaagent.orchestrator.story;
 
 import dev.qaagent.core.StoryNotFoundException;
+import dev.qaagent.core.design.TestDesignOutput;
 import dev.qaagent.core.story.RetrievedChunk;
+import dev.qaagent.core.testcase.TestCaseDraft;
+import dev.qaagent.core.testcase.TestCaseStep;
 import dev.qaagent.core.story.Story;
 import dev.qaagent.core.story.StoryAnalysisInput;
 import dev.qaagent.core.story.StoryAnalysisOutput;
@@ -45,13 +48,17 @@ class StoryToTestAssetsWorkflowTest {
     @Test
     void runsTheReviewThenCompletesWhenApprovalIsSignalled() {
         StoryToTestAssetsWorkflow workflow = start("run-1");
-        workflow.approvalDecision(new ApprovalDecision("sam", "Looks clear."));
+        workflow.approvalDecision(new ApprovalDecision("sam", List.of(
+                new ApprovalDecision.CaseDecision("TC1", ApprovalDecision.Action.APPROVE, null),
+                new ApprovalDecision.CaseDecision("TC2", ApprovalDecision.Action.REJECT, null))));
         WorkflowStub.fromTyped(workflow).getResult(Void.class);
 
         assertThat(activities.calls).containsExactly(
-                "fetchStory", "retrieveContext", "runStoryAnalysis", "postStoryComment", "markWaiting", "complete");
+                "fetchStory", "retrieveContext", "runStoryAnalysis", "postStoryComment",
+                "runTestDesign", "saveDrafts", "createApprovalRequest", "applyDecision");
         assertThat(activities.signaled).isTrue();
         assertThat(activities.decidedBy).isEqualTo("sam");
+        assertThat(activities.actions).containsExactly("APPROVE", "REJECT");
         assertThat(activities.riskScore).isEqualTo(2);
     }
 
@@ -60,7 +67,7 @@ class StoryToTestAssetsWorkflowTest {
         StoryToTestAssetsWorkflow workflow = start("run-2");
         WorkflowStub.fromTyped(workflow).getResult(Void.class);
 
-        assertThat(activities.calls).endsWith("complete");
+        assertThat(activities.calls).endsWith("applyDecision");
         assertThat(activities.signaled).isFalse();
     }
 
@@ -92,6 +99,7 @@ class StoryToTestAssetsWorkflowTest {
         boolean missing;
         boolean signaled;
         String decidedBy = "";
+        final List<String> actions = new CopyOnWriteArrayList<>();
         int riskScore;
         String failure = "";
 
@@ -129,6 +137,42 @@ class StoryToTestAssetsWorkflowTest {
         @Override
         public void postComment(String runId, String storyId, StoryAnalysisOutput output) {
             calls.add("postStoryComment");
+        }
+
+        @Override
+        public TestDesignOutput runTestDesign(String runId, Story story, StoryAnalysisOutput analysis) {
+            calls.add("runTestDesign");
+            return new TestDesignOutput(story.id(), List.of(new TestDesignOutput.DesignedCase(
+                    "TC1", "Add a spouse", TestCaseDraft.Type.POSITIVE, TestCaseDraft.Priority.P2,
+                    List.of("An active subscriber."),
+                    List.of(new TestCaseStep("Submit an ADD for a spouse.", "The spouse is stored.")),
+                    List.of("spouse aged 30"),
+                    List.of("AC1"),
+                    null)));
+        }
+
+        @Override
+        public void saveDrafts(String runId, String storyId, TestDesignOutput designed) {
+            calls.add("saveDrafts");
+        }
+
+        @Override
+        public String createApprovalRequest(String runId) {
+            calls.add("createApprovalRequest");
+            return "await-step";
+        }
+
+        @Override
+        public void applyDecision(String runId, String awaitStepId, boolean signaled, ApprovalDecision decision, int riskScore) {
+            calls.add("applyDecision");
+            this.signaled = signaled;
+            this.decidedBy = decision == null ? "" : decision.decidedBy();
+            this.riskScore = riskScore;
+            if (decision != null) {
+                for (ApprovalDecision.CaseDecision item : decision.decisions()) {
+                    actions.add(item.action().name());
+                }
+            }
         }
 
         @Override

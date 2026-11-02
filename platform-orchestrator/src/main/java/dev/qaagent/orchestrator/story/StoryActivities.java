@@ -1,5 +1,6 @@
 package dev.qaagent.orchestrator.story;
 
+import dev.qaagent.core.design.TestDesignOutput;
 import dev.qaagent.core.story.RetrievedChunk;
 import dev.qaagent.core.story.Story;
 import dev.qaagent.core.story.StoryAnalysisInput;
@@ -29,6 +30,18 @@ public interface StoryActivities {
 
     @ActivityMethod
     void complete(String runId, String awaitStepId, boolean signaled, ApprovalDecision decision, int riskScore);
+
+    @ActivityMethod
+    TestDesignOutput runTestDesign(String runId, Story story, StoryAnalysisOutput analysis);
+
+    @ActivityMethod
+    void saveDrafts(String runId, String storyId, TestDesignOutput designed);
+
+    @ActivityMethod
+    String createApprovalRequest(String runId);
+
+    @ActivityMethod
+    void applyDecision(String runId, String awaitStepId, boolean signaled, ApprovalDecision decision, int riskScore);
 
     @ActivityMethod
     void failRun(String runId, String error);

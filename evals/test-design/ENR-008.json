@@ -1,0 +1,40 @@
+{
+  "story": {
+    "id": "ENR-008",
+    "title": "Reject an invalid relationship code",
+    "description": "An 834 ADD uses a relationship code that is not SPOUSE or CHILD. The file is rejected.",
+    "acceptanceCriteria": [
+      "A relationship other than SPOUSE or CHILD is rejected.",
+      "No dependent is stored.",
+      "The rejection reason names the relationship code."
+    ]
+  },
+  "analysis": {
+    "storyId": "ENR-008",
+    "summary": "A relationship other than SPOUSE or CHILD is rejected and nothing is stored.",
+    "criteria": [
+      { "id": "AC1", "text": "A relationship other than SPOUSE or CHILD is rejected.", "testable": true, "issue": null },
+      { "id": "AC2", "text": "No dependent is stored.", "testable": true, "issue": null },
+      { "id": "AC3", "text": "The rejection reason names the relationship code.", "testable": true, "issue": null }
+    ],
+    "ambiguities": [],
+    "missingScenarios": [],
+    "riskScore": 2,
+    "riskReasons": ["The allowed relationships and the rejection are named."],
+    "citations": []
+  },
+  "retrievedContext": [
+    {
+      "chunkId": "44444444-4444-4444-4444-444444444444",
+      "source": "knowledge-seed",
+      "title": "enrollment business rules",
+      "text": "A relationship other than SPOUSE or CHILD is rejected. No dependent is stored."
+    }
+  ],
+  "similarCases": [],
+  "expected": {
+    "minCases": 1,
+    "mustIncludeTypes": ["NEGATIVE"],
+    "mustCoverCriteria": ["AC1"]
+  }
+}

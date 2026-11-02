@@ -62,7 +62,8 @@ public class RunStore {
                 Timestamp.from(Instant.now()), jsonb(java.util.Map.of("error", error == null ? "The run failed." : error)), runId);
     }
 
-    public void completeRun(UUID runId, boolean signaled, String decidedBy, int riskScore) {
+    public void completeRun(UUID runId, boolean signaled, String decidedBy, int riskScore,
+                            int approved, int rejected, int edited) {
         jdbc.update("""
                 UPDATE workflow_run
                 SET status = 'COMPLETED', completed_at = ?, summary = ?
@@ -72,7 +73,10 @@ public class RunStore {
                 jsonb(java.util.Map.of(
                         "approval", signaled ? "received" : "timedOut",
                         "decidedBy", decidedBy == null ? "" : decidedBy,
-                        "riskScore", riskScore)),
+                        "riskScore", riskScore,
+                        "approved", approved,
+                        "rejected", rejected,
+                        "edited", edited)),
                 runId);
     }
 
@@ -110,13 +114,123 @@ public class RunStore {
     }
 
     public boolean alreadyPosted(String idempotencyKey) {
+        return alreadyRecorded("postStoryComment", idempotencyKey);
+    }
+
+    public boolean alreadyRecorded(String action, String idempotencyKey) {
         Integer count = jdbc.queryForObject("""
                 SELECT count(*) FROM audit_event
-                WHERE action = 'postStoryComment' AND details->>'idempotencyKey' = ?
+                WHERE action = ? AND details->>'idempotencyKey' = ?
                 """,
                 Integer.class,
+                action,
                 idempotencyKey);
         return count != null && count > 0;
+    }
+
+    public void rememberAction(UUID runId, String action, String targetSystem, String targetRef, java.util.Map<String, ?> details) {
+        jdbc.update("""
+                INSERT INTO audit_event
+                    (id, run_id, actor, action, target_system, target_ref, details, created_at)
+                VALUES (?, ?, 'qa-agent', ?, ?, ?, ?, ?)
+                """,
+                UUID.randomUUID(),
+                runId,
+                action,
+                targetSystem,
+                targetRef,
+                jsonb(details),
+                Timestamp.from(Instant.now()));
+    }
+
+    public void insertDraft(UUID runId, String key, String externalRef, Object content) {
+        jdbc.update("""
+                INSERT INTO test_case_draft (id, run_id, key, external_ref, status, content)
+                VALUES (?, ?, ?, ?, 'DRAFT', ?)
+                """,
+                UUID.randomUUID(), runId, key, externalRef, jsonb(content));
+    }
+
+    public Optional<DraftView> findDraft(UUID runId, String key) {
+        List<DraftView> rows = jdbc.query("""
+                SELECT id, key, external_ref, status, content
+                FROM test_case_draft WHERE run_id = ? AND key = ?
+                """,
+                (rs, row) -> draft(rs),
+                runId, key);
+        return rows.stream().findFirst();
+    }
+
+    public void updateDraft(UUID runId, String key, String status, Object content) {
+        if (content == null) {
+            jdbc.update("UPDATE test_case_draft SET status = ? WHERE run_id = ? AND key = ?", status, runId, key);
+            return;
+        }
+        jdbc.update("""
+                UPDATE test_case_draft SET status = ?, content = ? WHERE run_id = ? AND key = ?
+                """,
+                status, jsonb(content), runId, key);
+    }
+
+    public Optional<UUID> pendingApproval(UUID runId) {
+        List<UUID> ids = jdbc.query("""
+                SELECT id FROM approval WHERE run_id = ? AND status = 'PENDING' ORDER BY requested_at
+                """,
+                (rs, row) -> rs.getObject("id", UUID.class),
+                runId);
+        return ids.stream().findFirst();
+    }
+
+    public UUID insertApproval(UUID runId) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO approval (id, run_id, status, requested_at)
+                VALUES (?, ?, 'PENDING', ?)
+                """,
+                id, runId, Timestamp.from(Instant.now()));
+        return id;
+    }
+
+    public void decideApproval(UUID runId, String status, String decidedBy, Object decision) {
+        jdbc.update("""
+                UPDATE approval
+                SET status = ?, decided_at = ?, decided_by = ?, decision = ?
+                WHERE run_id = ? AND status = 'PENDING'
+                """,
+                status, Timestamp.from(Instant.now()), decidedBy, jsonb(decision), runId);
+    }
+
+    public Optional<ApprovalView> findApproval(UUID approvalId) {
+        List<ApprovalView> rows = jdbc.query("""
+                SELECT a.id, a.run_id, r.story_id, a.status, a.requested_at, a.decided_at, a.decided_by
+                FROM approval a
+                JOIN workflow_run r ON r.id = a.run_id
+                WHERE a.id = ?
+                """,
+                (rs, row) -> approval(rs),
+                approvalId);
+        return rows.stream().findFirst();
+    }
+
+    public List<ApprovalView> listApprovals(String status) {
+        if (status == null || status.isBlank()) {
+            return jdbc.query("""
+                    SELECT a.id, a.run_id, r.story_id, a.status, a.requested_at, a.decided_at, a.decided_by
+                    FROM approval a
+                    JOIN workflow_run r ON r.id = a.run_id
+                    ORDER BY a.requested_at DESC
+                    """,
+                    (rs, row) -> approval(rs));
+        }
+        return jdbc.query("""
+                SELECT a.id, a.run_id, r.story_id, a.status, a.requested_at, a.decided_at, a.decided_by
+                FROM approval a
+                JOIN workflow_run r ON r.id = a.run_id
+                WHERE a.status = ?
+                ORDER BY a.requested_at DESC
+                """,
+                (rs, row) -> approval(rs),
+                status);
     }
 
     public void rememberPost(UUID runId, String storyId, String idempotencyKey, boolean posted) {
@@ -181,13 +295,30 @@ public class RunStore {
                 SELECT id, key, external_ref, status, content
                 FROM test_case_draft WHERE run_id = ? ORDER BY key
                 """,
-                (rs, row) -> new DraftView(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("key"),
-                        rs.getString("external_ref"),
-                        rs.getString("status"),
-                        tree(rs.getObject("content"))),
+                (rs, row) -> draft(rs),
                 runId);
+    }
+
+    private DraftView draft(ResultSet rs) throws SQLException {
+        return new DraftView(
+                rs.getObject("id", UUID.class),
+                rs.getString("key"),
+                rs.getString("external_ref"),
+                rs.getString("status"),
+                tree(rs.getObject("content")));
+    }
+
+    private ApprovalView approval(ResultSet rs) throws SQLException {
+        UUID runId = rs.getObject("run_id", UUID.class);
+        return new ApprovalView(
+                rs.getObject("id", UUID.class),
+                runId,
+                rs.getString("story_id"),
+                rs.getString("status"),
+                instant(rs, "requested_at"),
+                instant(rs, "decided_at"),
+                rs.getString("decided_by"),
+                drafts(runId));
     }
 
     private List<DataSetView> dataSets(UUID runId) {
@@ -297,6 +428,18 @@ public class RunStore {
     }
 
     public record DraftView(UUID id, String key, String externalRef, String status, JsonNode content) {
+    }
+
+    public record ApprovalView(
+            UUID id,
+            UUID runId,
+            String storyId,
+            String status,
+            Instant requestedAt,
+            Instant decidedAt,
+            String decidedBy,
+            List<DraftView> drafts
+    ) {
     }
 
     public record DataSetView(UUID id, String testCaseKey, boolean provisioned, JsonNode spec) {

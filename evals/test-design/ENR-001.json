@@ -1,0 +1,40 @@
+{
+  "story": {
+    "id": "ENR-001",
+    "title": "Add a spouse as a dependent",
+    "description": "A benefits administrator submits an 834 maintenance type ADD for a spouse on an active subscriber. The enrollment system stores the dependent and keeps the subscriber coverage unchanged.",
+    "acceptanceCriteria": [
+      "Given an active subscriber, when an ADD is submitted with relationship SPOUSE, then the spouse is stored as a dependent.",
+      "The subscriber coverage effective date does not change.",
+      "The response outcome is ACCEPTED."
+    ]
+  },
+  "analysis": {
+    "storyId": "ENR-001",
+    "summary": "Add a spouse with ADD. The spouse is stored, the subscriber date stays unchanged, and the outcome is ACCEPTED.",
+    "criteria": [
+      { "id": "AC1", "text": "The spouse is stored as a dependent.", "testable": true, "issue": null },
+      { "id": "AC2", "text": "The subscriber coverage effective date does not change.", "testable": true, "issue": null },
+      { "id": "AC3", "text": "The response outcome is ACCEPTED.", "testable": true, "issue": null }
+    ],
+    "ambiguities": [],
+    "missingScenarios": [],
+    "riskScore": 2,
+    "riskReasons": ["The outcomes are named."],
+    "citations": []
+  },
+  "retrievedContext": [
+    {
+      "chunkId": "11111111-1111-1111-1111-111111111111",
+      "source": "knowledge-seed",
+      "title": "enrollment business rules",
+      "text": "An ADD for relationship SPOUSE is accepted when the subscriber is active, and the subscriber coverage date stays unchanged."
+    }
+  ],
+  "similarCases": [],
+  "expected": {
+    "minCases": 2,
+    "mustIncludeTypes": ["POSITIVE"],
+    "mustCoverCriteria": ["AC1", "AC3"]
+  }
+}

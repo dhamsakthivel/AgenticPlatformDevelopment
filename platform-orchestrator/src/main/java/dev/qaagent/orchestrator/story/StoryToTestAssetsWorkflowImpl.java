@@ -1,6 +1,7 @@
 package dev.qaagent.orchestrator.story;
 
 import dev.qaagent.core.StoryNotFoundException;
+import dev.qaagent.core.design.TestDesignOutput;
 import dev.qaagent.core.story.RetrievedChunk;
 import dev.qaagent.core.story.Story;
 import dev.qaagent.core.story.StoryAnalysisInput;
@@ -35,9 +36,18 @@ public class StoryToTestAssetsWorkflowImpl implements StoryToTestAssetsWorkflow 
             StoryAnalysisOutput output = activities.analyze(command.runId(), new StoryAnalysisInput(
                     story.id(), story.title(), story.description(), story.acceptanceCriteria(), context));
             activities.postComment(command.runId(), command.storyId(), output);
-            String awaitStepId = activities.markWaiting(command.runId());
+            int version = Workflow.getVersion("test-design-before-approval", Workflow.DEFAULT_VERSION, 1);
+            if (version == Workflow.DEFAULT_VERSION) {
+                String awaitStepId = activities.markWaiting(command.runId());
+                boolean signaled = Workflow.await(APPROVAL_WAIT, () -> decision != null);
+                activities.complete(command.runId(), awaitStepId, signaled, decision, output.riskScore());
+                return;
+            }
+            TestDesignOutput designed = activities.runTestDesign(command.runId(), story, output);
+            activities.saveDrafts(command.runId(), story.id(), designed);
+            String awaitStepId = activities.createApprovalRequest(command.runId());
             boolean signaled = Workflow.await(APPROVAL_WAIT, () -> decision != null);
-            activities.complete(command.runId(), awaitStepId, signaled, decision, output.riskScore());
+            activities.applyDecision(command.runId(), awaitStepId, signaled, decision, output.riskScore());
         } catch (ActivityFailure exception) {
             activities.failRun(command.runId(), message(exception));
             throw ApplicationFailure.newNonRetryableFailure(message(exception), "RunFailed");

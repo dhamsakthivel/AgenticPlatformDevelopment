@@ -1,0 +1,39 @@
+{
+  "story": {
+    "id": "ENR-016",
+    "title": "Make family enrollment easier",
+    "description": "Families should have a smoother time when they enroll. Do the right thing for dependents.",
+    "acceptanceCriteria": [
+      "It should work for families."
+    ]
+  },
+  "analysis": {
+    "storyId": "ENR-016",
+    "summary": "The story does not say which relatives can enroll or what outcome to expect.",
+    "criteria": [
+      { "id": "AC1", "text": "It should work for families.", "testable": false, "issue": "No observable outcome." }
+    ],
+    "ambiguities": [
+      { "question": "Which relatives count as family?", "severity": "HIGH" }
+    ],
+    "missingScenarios": ["A spouse add.", "A child over the age limit."],
+    "riskScore": 5,
+    "riskReasons": ["The only criterion cannot be tested."],
+    "citations": []
+  },
+  "retrievedContext": [
+    {
+      "chunkId": "55555555-5555-5555-5555-555555555555",
+      "source": "knowledge-seed",
+      "title": "testing standards",
+      "text": "A vague story with no testable criteria should produce a case that records the missing criterion instead of inventing a pass."
+    }
+  ],
+  "similarCases": [],
+  "expected": {
+    "minCases": 1,
+    "mustIncludeTypes": [],
+    "mustCoverCriteria": [],
+    "mustMentionAnyOf": ["not testable"]
+  }
+}
