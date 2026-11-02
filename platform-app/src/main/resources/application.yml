@@ -1,0 +1,99 @@
+spring:
+  application:
+    name: qa-agent-platform
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: jdbc:postgresql://localhost:5432/qa_agent
+    username: qa_agent
+    password: qa_agent
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    path: /api/v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+qaagent:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    chat-model: ${OPENAI_CHAT_MODEL:}
+    chat-model-small: ${OPENAI_CHAT_MODEL_SMALL:}
+    embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    embedding-dimensions: ${EMBEDDING_DIMENSIONS:1536}
+  ado:
+    org-url: ${ADO_ORG_URL:}
+    project: ${ADO_PROJECT:}
+    pat: ${ADO_PAT:}
+    webhook-secret: ${ADO_WEBHOOK_SECRET:}
+  qtest:
+    base-url: ${QTEST_BASE_URL:http://localhost:8091}
+    token: ${QTEST_TOKEN:}
+    project-id: ${QTEST_PROJECT_ID:1}
+    module-id: ${QTEST_MODULE_ID:1}
+    status-field-id: ${QTEST_STATUS_FIELD_ID:}
+  seed:
+    stories-path: ${STORIES_SEED_PATH:scripts/seed/stories.json}
+  knowledge:
+    seed-path: ${KNOWLEDGE_SEED_PATH:knowledge-seed}
+    stories-path: ${STORIES_SEED_PATH:scripts/seed/stories.json}
+    embedding-batch-size: 32
+    embedding-usd-per-million-tokens: 0.02
+  retrieval:
+    profiles:
+      story-analysis:
+        sources:
+          - knowledge-seed
+          - upload
+          - story
+        module: enrollment
+        top-k: 8
+      test-design:
+        sources:
+          - knowledge-seed
+          - upload
+          - test-case
+        module: enrollment
+        top-k: 8
+      test-data:
+        sources:
+          - knowledge-seed
+        module: enrollment
+        top-k: 6
+  servicenow:
+    instance-url: ${SERVICENOW_INSTANCE_URL:}
+    user: ${SERVICENOW_USER:}
+    password: ${SERVICENOW_PASSWORD:}
+  enrollment:
+    url: ${ENROLLMENT_APP_URL:http://localhost:8092}
+  temporal:
+    target: ${TEMPORAL_TARGET:localhost:7233}
+    task-queue: qa-agents
+  platform:
+    auto-post-story-comment: ${AUTO_POST_STORY_COMMENT:true}
+  prompts:
+    active:
+      story-analysis: v1
+      test-design: v1
+  llm:
+    price-table: ${LLM_PRICE_TABLE:classpath:llm-prices.yml}
+    # gpt-5 and o-series models reject every value except 1, so the client sends 1 for them.
+    temperature: 0.2
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+---
+spring:
+  config:
+    activate:
+      on-profile: sandbox

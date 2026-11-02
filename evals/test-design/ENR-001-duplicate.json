@@ -1,0 +1,38 @@
+{
+  "story": {
+    "id": "ENR-001",
+    "title": "Add a spouse as a dependent",
+    "description": "A benefits administrator submits an 834 maintenance type ADD for a spouse on an active subscriber. The enrollment system stores the dependent and keeps the subscriber coverage unchanged.",
+    "acceptanceCriteria": [
+      "Given an active subscriber, when an ADD is submitted with relationship SPOUSE, then the spouse is stored as a dependent.",
+      "The response outcome is ACCEPTED."
+    ]
+  },
+  "analysis": {
+    "storyId": "ENR-001",
+    "summary": "Add a spouse. The spouse is stored and the outcome is ACCEPTED.",
+    "criteria": [
+      { "id": "AC1", "text": "The spouse is stored as a dependent.", "testable": true, "issue": null },
+      { "id": "AC2", "text": "The response outcome is ACCEPTED.", "testable": true, "issue": null }
+    ],
+    "ambiguities": [],
+    "missingScenarios": [],
+    "riskScore": 2,
+    "riskReasons": ["The outcome is named."],
+    "citations": []
+  },
+  "retrievedContext": [],
+  "similarCases": [
+    {
+      "id": "QT-42",
+      "title": "Add a spouse as a dependent",
+      "summary": "Submit an ADD for a spouse. The spouse is stored and the outcome is ACCEPTED."
+    }
+  ],
+  "expected": {
+    "minCases": 1,
+    "mustIncludeTypes": ["POSITIVE"],
+    "mustCoverCriteria": ["AC1"],
+    "mustDuplicateOf": "QT-42"
+  }
+}

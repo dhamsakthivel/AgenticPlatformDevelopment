@@ -1,0 +1,40 @@
+{
+  "story": {
+    "id": "ENR-004",
+    "title": "Terminate all coverage for a subscriber",
+    "description": "An 834 maintenance type TERM ends the subscriber coverage and every active dependent on that contract as of the termination date.",
+    "acceptanceCriteria": [
+      "The subscriber coverage end date is the termination date on the 834.",
+      "Every active dependent on the contract is ended on the same date.",
+      "The response outcome is ACCEPTED."
+    ]
+  },
+  "analysis": {
+    "storyId": "ENR-004",
+    "summary": "TERM for the subscriber ends the subscriber and every dependent. The outcome is ACCEPTED.",
+    "criteria": [
+      { "id": "AC1", "text": "The subscriber coverage end date is the termination date.", "testable": true, "issue": null },
+      { "id": "AC2", "text": "Every active dependent is ended on the same date.", "testable": true, "issue": null },
+      { "id": "AC3", "text": "The response outcome is ACCEPTED.", "testable": true, "issue": null }
+    ],
+    "ambiguities": [],
+    "missingScenarios": [],
+    "riskScore": 2,
+    "riskReasons": ["The people and the outcome are named."],
+    "citations": []
+  },
+  "retrievedContext": [
+    {
+      "chunkId": "33333333-3333-3333-3333-333333333333",
+      "source": "knowledge-seed",
+      "title": "enrollment business rules",
+      "text": "TERM for the subscriber ends the subscriber and every dependent on the contract. The outcome is ACCEPTED."
+    }
+  ],
+  "similarCases": [],
+  "expected": {
+    "minCases": 1,
+    "mustIncludeTypes": ["POSITIVE"],
+    "mustCoverCriteria": ["AC1"]
+  }
+}

@@ -1,0 +1,23 @@
+# US dollars per 1,000,000 tokens. Standard (non-batch) text prices from
+# https://developers.openai.com/api/docs/pricing as published for October 2026.
+# Cached-input discounts are not applied. Add a row when you set OPENAI_CHAT_MODEL
+# to a name that is not listed here.
+models:
+  gpt-5-mini:
+    input-usd-per-million-tokens: 0.25
+    output-usd-per-million-tokens: 2.00
+  gpt-5-nano:
+    input-usd-per-million-tokens: 0.05
+    output-usd-per-million-tokens: 0.40
+  gpt-4.1-mini:
+    input-usd-per-million-tokens: 0.40
+    output-usd-per-million-tokens: 1.60
+  gpt-4.1-nano:
+    input-usd-per-million-tokens: 0.10
+    output-usd-per-million-tokens: 0.40
+  gpt-4o-mini:
+    input-usd-per-million-tokens: 0.15
+    output-usd-per-million-tokens: 0.60
+  gpt-4o:
+    input-usd-per-million-tokens: 2.50
+    output-usd-per-million-tokens: 10.00

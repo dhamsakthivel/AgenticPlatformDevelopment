@@ -1,0 +1,42 @@
+name: qa-agent-platform
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: qa_agent
+      POSTGRES_USER: qa_agent
+      POSTGRES_PASSWORD: qa_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - qa_agent_pg:/var/lib/postgresql/data
+      - ./postgres/init-vector.sql:/docker-entrypoint-initdb.d/10-vector.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa_agent -d qa_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4.7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Official Temporal CLI image. `server start-dev` embeds the server, SQLite,
+  # and the Web UI, so a second UI image is not used.
+  # https://docs.temporal.io/cli/setup-cli
+  temporal:
+    image: temporalio/temporal:1.9.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0"]
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+
+volumes:
+  qa_agent_pg:

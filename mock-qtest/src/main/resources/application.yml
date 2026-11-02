@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: mock-qtest
+
+server:
+  port: 8091

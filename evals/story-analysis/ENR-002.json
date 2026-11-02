@@ -1,0 +1,28 @@
+{
+  "story": {
+    "id": "ENR-002",
+    "title": "Add a child dependent under age 26",
+    "description": "An 834 ADD names a child whose age is under 26. The child is stored with relationship CHILD and the same plan as the subscriber.",
+    "acceptanceCriteria": [
+      "A child aged 0 through 25 is accepted as a dependent.",
+      "The relationship stored is CHILD.",
+      "The child coverage effective date matches the date on the enrollment."
+    ]
+  },
+  "retrievedContext": [
+    {
+      "chunkId": "11111111-1111-1111-1111-111111111111",
+      "source": "knowledge-seed",
+      "title": "enrollment business rules",
+      "text": "Example Benefit Plan, invented for practice. An ADD for relationship SPOUSE is accepted when the subscriber is active, and the subscriber coverage date stays unchanged. A child aged 0 through 25 with relationship CHILD is accepted. Relationship CHILD at age 26 or older is rejected. TERM for the subscriber ends every dependent on the contract. A relationship other than SPOUSE or CHILD is rejected."
+    }
+  ],
+  "expected": {
+    "mustFindAmbiguitiesContaining": [],
+    "riskScoreRange": [
+      1,
+      3
+    ],
+    "minCriteria": 3
+  }
+}

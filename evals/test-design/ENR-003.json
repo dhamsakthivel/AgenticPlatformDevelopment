@@ -1,0 +1,40 @@
+{
+  "story": {
+    "id": "ENR-003",
+    "title": "Reject a child dependent aged 26 or older",
+    "description": "An 834 ADD names a dependent with relationship CHILD and an age of 26 or more. The enrollment is rejected and no dependent is stored.",
+    "acceptanceCriteria": [
+      "Age 26 or older with relationship CHILD is rejected.",
+      "No new member row is stored.",
+      "The rejection reason says the child exceeds the dependent age limit."
+    ]
+  },
+  "analysis": {
+    "storyId": "ENR-003",
+    "summary": "A child aged 26 or older is rejected and nothing is stored.",
+    "criteria": [
+      { "id": "AC1", "text": "Age 26 or older with relationship CHILD is rejected.", "testable": true, "issue": null },
+      { "id": "AC2", "text": "No new member row is stored.", "testable": true, "issue": null },
+      { "id": "AC3", "text": "The rejection reason says the child exceeds the dependent age limit.", "testable": true, "issue": null }
+    ],
+    "ambiguities": [],
+    "missingScenarios": ["A child aged 25 is the boundary that should still be accepted."],
+    "riskScore": 2,
+    "riskReasons": ["The rejection reason is named."],
+    "citations": []
+  },
+  "retrievedContext": [
+    {
+      "chunkId": "22222222-2222-2222-2222-222222222222",
+      "source": "knowledge-seed",
+      "title": "enrollment business rules",
+      "text": "Relationship CHILD at age 26 or older is rejected. The reason says the child exceeds the dependent age limit. A child aged 25 is accepted."
+    }
+  ],
+  "similarCases": [],
+  "expected": {
+    "minCases": 1,
+    "mustIncludeTypes": ["NEGATIVE"],
+    "mustCoverCriteria": ["AC1"]
+  }
+}

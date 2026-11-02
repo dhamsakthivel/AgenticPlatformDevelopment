@@ -1,0 +1,228 @@
+[
+  {
+    "id": "ENR-001",
+    "title": "Add a spouse as a dependent",
+    "description": "A benefits administrator submits an 834 maintenance type ADD for a spouse on an active subscriber. The enrollment system stores the dependent and keeps the subscriber coverage unchanged.",
+    "acceptanceCriteria": [
+      "Given an active subscriber, when an ADD is submitted with relationship SPOUSE, then the spouse is stored as a dependent.",
+      "The subscriber coverage effective date does not change.",
+      "The response outcome is ACCEPTED."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-002",
+    "title": "Add a child dependent under age 26",
+    "description": "An 834 ADD names a child whose age is under 26. The child is stored with relationship CHILD and the same plan as the subscriber.",
+    "acceptanceCriteria": [
+      "A child aged 0 through 25 is accepted as a dependent.",
+      "The relationship stored is CHILD.",
+      "The child coverage effective date matches the date on the enrollment."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-003",
+    "title": "Reject a child dependent aged 26 or older",
+    "description": "An 834 ADD names a dependent with relationship CHILD and an age of 26 or more. The enrollment is rejected and no dependent is stored.",
+    "acceptanceCriteria": [
+      "Age 26 or older with relationship CHILD is rejected.",
+      "No new member row is stored.",
+      "The rejection reason says the child exceeds the dependent age limit."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-004",
+    "title": "Terminate all coverage for a subscriber",
+    "description": "An 834 maintenance type TERM ends the subscriber coverage and every active dependent on that contract as of the termination date.",
+    "acceptanceCriteria": [
+      "The subscriber coverage end date is the termination date on the 834.",
+      "Every active dependent on the contract is ended on the same date.",
+      "The response outcome is ACCEPTED."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-005",
+    "title": "Terminate one dependent and keep the subscriber",
+    "description": "An 834 TERM names a single dependent. The subscriber and any other dependents stay active.",
+    "acceptanceCriteria": [
+      "Only the named dependent coverage is ended.",
+      "The subscriber coverage stays active.",
+      "Other dependents on the contract stay active."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-006",
+    "title": "Accept a retroactive effective date inside 30 days",
+    "description": "An 834 ADD has an effective date up to 30 days before the file date. The enrollment is accepted and the earlier effective date is stored.",
+    "acceptanceCriteria": [
+      "An effective date 1 to 30 days before the file date is accepted.",
+      "The stored effective date is the date from the 834, not the file date.",
+      "The response outcome is ACCEPTED."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-007",
+    "title": "Reject a retroactive effective date older than 30 days",
+    "description": "An 834 ADD has an effective date more than 30 days before the file date. The enrollment is rejected and nothing is stored.",
+    "acceptanceCriteria": [
+      "An effective date 31 or more days before the file date is rejected.",
+      "No member or coverage row is stored.",
+      "The rejection reason says the retroactive window was exceeded."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-008",
+    "title": "Reject an invalid relationship code",
+    "description": "An 834 ADD uses a relationship code that is not SPOUSE or CHILD. The file is rejected.",
+    "acceptanceCriteria": [
+      "A relationship other than SPOUSE or CHILD is rejected.",
+      "No dependent is stored.",
+      "The rejection reason names the relationship code."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-009",
+    "title": "Reject a second active subscriber with the same member identifier",
+    "description": "An 834 ADD tries to create a subscriber whose member identifier is already active. The new enrollment is rejected and the existing subscriber is unchanged.",
+    "acceptanceCriteria": [
+      "A duplicate active member identifier is rejected.",
+      "The existing subscriber coverage is unchanged.",
+      "The rejection reason says the member identifier is already active."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-010",
+    "title": "Change the subscriber mailing address without changing the plan",
+    "description": "An 834 maintenance type CHANGE updates the mailing address. Plan type, coverage dates, and dependents stay the same.",
+    "acceptanceCriteria": [
+      "The mailing address is replaced with the address on the 834.",
+      "Plan type stays the same.",
+      "Coverage effective and end dates stay the same."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-011",
+    "title": "Change the plan from HMO to PPO mid-year",
+    "description": "An 834 CHANGE moves an active subscriber from plan type HMO to PPO on a stated effective date. Dependents move with the subscriber.",
+    "acceptanceCriteria": [
+      "The subscriber plan type becomes PPO on the effective date.",
+      "The previous HMO coverage ends the day before that date.",
+      "Active dependents move to PPO on the same date."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-012",
+    "title": "Apply maintenance type CHANGE to an existing enrollment",
+    "description": "An 834 CHANGE for a known member updates the fields present on the file and leaves every omitted field as it was.",
+    "acceptanceCriteria": [
+      "Fields present on the 834 are updated.",
+      "Fields omitted from the 834 keep their previous values.",
+      "An unknown member identifier is rejected."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-013",
+    "title": "Apply maintenance type TERM",
+    "description": "An 834 TERM for a known member ends coverage on the termination date and does not delete the member history.",
+    "acceptanceCriteria": [
+      "Coverage end date is the termination date.",
+      "The member record remains available for inquiry.",
+      "A TERM for an unknown member identifier is rejected."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-014",
+    "title": "Reject an 834 that is missing the member identifier",
+    "description": "An 834 ADD has no member identifier reference. The file is rejected before any member is stored.",
+    "acceptanceCriteria": [
+      "A missing member identifier is rejected.",
+      "No member row is stored.",
+      "The rejection reason says the member identifier is required."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-015",
+    "title": "Reject an 834 date that is not CCYYMMDD",
+    "description": "An 834 date field uses a format other than CCYYMMDD. The file is rejected and nothing is stored.",
+    "acceptanceCriteria": [
+      "A date that is not eight digits CCYYMMDD is rejected.",
+      "No member or coverage row is stored.",
+      "The rejection reason names the date field."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": false
+  },
+  {
+    "id": "ENR-016",
+    "title": "Make family enrollment easier",
+    "description": "Families should have a smoother time when they enroll. Do the right thing for dependents.",
+    "acceptanceCriteria": [
+      "It should work for families."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": true
+  },
+  {
+    "id": "ENR-017",
+    "title": "Handle coverage changes",
+    "description": "When something about coverage changes, update the system.",
+    "acceptanceCriteria": [],
+    "state": "New",
+    "module": "enrollment",
+    "vague": true
+  },
+  {
+    "id": "ENR-018",
+    "title": "Fix problems in the 834 file",
+    "description": "Some 834 files are wrong. Handle the bad ones.",
+    "acceptanceCriteria": [
+      "Bad files are handled."
+    ],
+    "state": "New",
+    "module": "enrollment",
+    "vague": true
+  }
+]
