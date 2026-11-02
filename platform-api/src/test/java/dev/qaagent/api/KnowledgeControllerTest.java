@@ -3,6 +3,7 @@ package dev.qaagent.api;
 import dev.qaagent.core.IntegrationException;
 import dev.qaagent.knowledge.ingest.KnowledgeService;
 import dev.qaagent.knowledge.retrieve.RankedChunk;
+import dev.qaagent.knowledge.store.ChunkStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +14,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -55,6 +57,19 @@ class KnowledgeControllerTest {
                 .andExpect(jsonPath("$.query").value("spouse dependent"))
                 .andExpect(jsonPath("$.hits[0].chunkId").value(chunkId.toString()))
                 .andExpect(jsonPath("$.hits[0].text").value("A spouse may enroll."));
+    }
+
+    @Test
+    void documentsReturnsTheIndexedNotes() throws Exception {
+        UUID id = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        when(knowledge.documents()).thenReturn(List.of(new ChunkStore.ListedDocument(
+                id, "Enrollment rules", "knowledge-seed", "enrollment-business-rules.md",
+                "example-benefit-plan", "enrollment", 4, Instant.parse("2026-11-01T20:00:00Z"))));
+
+        mvc.perform(get("/api/knowledge/documents"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Enrollment rules"))
+                .andExpect(jsonPath("$[0].chunks").value(4));
     }
 
     @Test

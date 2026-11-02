@@ -2,7 +2,7 @@
 
 Agents that turn a user story into reviewed test cases and synthetic test data, on a made-up health-insurance enrollment domain. Nothing here is a real client system.
 
-This repository is at **Phase 5**. The app can load 18 made-up enrollment stories, talk to Azure DevOps or a small stand-in for qTest, search a rule book of made-up enrollment notes, and run one story through the analyst and the test designer. `POST /api/runs` reads the story, writes the review, saves the comment, and stores draft test cases. A person approves, rejects, or edits those drafts with `POST /api/approvals/{id}/decision`. The screen still has four placeholder pages. Approved cases do not get synthetic enrollment files yet.
+This repository can load 18 made-up enrollment stories, talk to Azure DevOps or a small stand-in for qTest, search a rule book of made-up enrollment notes, and run one story through the analyst and the test designer. The screens at http://localhost:5173 start that run, show each step, and approve or reject the drafts. Approved cases do not get synthetic enrollment files yet.
 
 The full specification is [docs/SPEC.md](docs/SPEC.md). Build steps are in [docs/BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md).
 
@@ -155,6 +155,25 @@ $env:OPENAI_CHAT_MODEL = 'gpt-5-mini'
 
 Do not paste the key into a chat. The report lists pass or fail, the risk score, tokens, and cost for each story.
 
+## Drive a run from the screen
+
+Start Docker, the app, and the qTest stand-in the same way as below, with `OPENAI_API_KEY` and `OPENAI_CHAT_MODEL` set in the app window. In another window:
+
+```powershell
+cd $HOME\AgenticPlatformDevelopment\frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173.
+
+1. **Runs** explains the path: the story analyst writes a review, the test designer drafts cases, then the run waits for you.
+2. **Start a run** and pick a story. `ENR-002` is a clear story. `ENR-016` is vague on purpose, so the review should find gaps. Stay on the run page. The steps update as the agents finish. A model call usually takes about half a minute.
+3. When the status is **Waiting for you**, open **Approvals**. Approve, reject, or edit every draft, then send the decision. The run then completes.
+4. **Knowledge** searches the rule book the agents read. **Metrics** shows token cost and how many drafts were accepted.
+
+A story that already has a running or waiting run cannot be started again. Open that run from the message on the start dialog.
+
 ## Start a run
 
 Docker Desktop has to be running, including Postgres and the Temporal dev server. Start the app on the local profile, with `OPENAI_API_KEY` and `OPENAI_CHAT_MODEL` set if you want the analyst to call the model. Then ask for one story:
@@ -252,5 +271,4 @@ The personal access token needs permission to read and write work items. The scr
 ## Still to build
 
 1. The sample enrollment app and the agent that creates synthetic 834 files for approved cases.
-2. Live screens for runs, approvals, knowledge, and cost.
-3. Optional: run the tests in a browser and file defects.
+2. Optional: run the tests in a browser and file defects.

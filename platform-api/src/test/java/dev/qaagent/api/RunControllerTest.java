@@ -2,6 +2,7 @@ package dev.qaagent.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.qaagent.core.StoryNotFoundException;
+import dev.qaagent.orchestrator.metrics.MetricsQuery;
 import dev.qaagent.orchestrator.run.RunAlreadyStartedException;
 import dev.qaagent.orchestrator.run.RunNotFoundException;
 import dev.qaagent.orchestrator.run.RunService;
@@ -15,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -32,11 +34,14 @@ class RunControllerTest {
     @Mock
     private RunService runs;
 
+    @Mock
+    private MetricsQuery metrics;
+
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new RunController(runs, new RunEventStream())).build();
+        mvc = MockMvcBuilders.standaloneSetup(new RunController(runs, new RunEventStream(), metrics)).build();
     }
 
     @Test
@@ -95,6 +100,21 @@ class RunControllerTest {
 
         mvc.perform(get("/api/runs/{id}", runId))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void usageReturnsModelCallsForTheRun() throws Exception {
+        UUID runId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        UUID stepId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
+        when(runs.get(runId)).thenReturn(details(runId, "RUNNING"));
+        when(metrics.forRun(runId)).thenReturn(List.of(new MetricsQuery.LlmCallView(
+                stepId, "story-analysis", "gpt-5-mini", 10, 20, new BigDecimal("0.0100"), 200, true)));
+
+        mvc.perform(get("/api/runs/{id}/usage", runId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].purpose").value("story-analysis"))
+                .andExpect(jsonPath("$[0].inputTokens").value(10))
+                .andExpect(jsonPath("$[0].outputTokens").value(20));
     }
 
     @Test

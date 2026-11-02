@@ -1,6 +1,7 @@
 package dev.qaagent.api;
 
 import dev.qaagent.core.StoryNotFoundException;
+import dev.qaagent.orchestrator.metrics.MetricsQuery;
 import dev.qaagent.orchestrator.run.RunAlreadyStartedException;
 import dev.qaagent.orchestrator.run.RunNotFoundException;
 import dev.qaagent.orchestrator.run.RunService;
@@ -28,10 +29,12 @@ public class RunController {
 
     private final RunService runs;
     private final RunEventStream events;
+    private final MetricsQuery metrics;
 
-    public RunController(RunService runs, RunEventStream events) {
+    public RunController(RunService runs, RunEventStream events, MetricsQuery metrics) {
         this.runs = runs;
         this.events = events;
+        this.metrics = metrics;
     }
 
     @PostMapping
@@ -48,6 +51,12 @@ public class RunController {
     @GetMapping("/{id}")
     public RunStore.RunDetails get(@PathVariable UUID id) {
         return runs.get(id);
+    }
+
+    @GetMapping("/{id}/usage")
+    public List<MetricsQuery.LlmCallView> usage(@PathVariable UUID id) {
+        runs.get(id);
+        return metrics.forRun(id);
     }
 
     @GetMapping(value = "/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

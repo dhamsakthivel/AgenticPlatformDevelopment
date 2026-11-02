@@ -3,6 +3,7 @@ package dev.qaagent.api;
 import dev.qaagent.core.IntegrationException;
 import dev.qaagent.knowledge.ingest.KnowledgeService;
 import dev.qaagent.knowledge.retrieve.RankedChunk;
+import dev.qaagent.knowledge.store.ChunkStore;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -39,6 +40,11 @@ public class KnowledgeController {
             throw new IntegrationException("Choose a Markdown or PDF file to upload.");
         }
         return knowledge.ingestUpload(file.getOriginalFilename(), file.getBytes(), title, app, module, source);
+    }
+
+    @GetMapping("/documents")
+    public List<ChunkStore.ListedDocument> documents() {
+        return knowledge.documents();
     }
 
     @PostMapping("/reindex")

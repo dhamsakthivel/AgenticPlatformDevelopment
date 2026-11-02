@@ -165,6 +165,10 @@ public class KnowledgeService {
         return retriever.search(query, new SearchFilter(sources, resolvedApp, resolvedModule), resolvedLimit);
     }
 
+    public List<ChunkStore.ListedDocument> documents() {
+        return store.listDocuments();
+    }
+
     private IngestedDocument ingest(IngestDraft draft) {
         String redacted = redactor.redact(draft.text());
         String hash = ContentHasher.sha256(redacted);

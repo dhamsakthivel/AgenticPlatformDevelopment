@@ -40,7 +40,7 @@ export function AppLayout() {
   return (
     <div className="flex min-h-svh flex-col">
       <header className="border-b">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-3 px-6 py-3">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-6 py-3">
           <span className="font-medium">QA Agentic Platform</span>
           <nav className="flex flex-wrap items-center gap-1">
             {NAV_ITEMS.map((item) => (
@@ -54,10 +54,12 @@ export function AppLayout() {
               </Button>
             ))}
           </nav>
-          <span className="ml-auto text-xs text-muted-foreground">{apiLabel}</span>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {apiLabel}
+          </span>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
         <Outlet />
       </main>
     </div>

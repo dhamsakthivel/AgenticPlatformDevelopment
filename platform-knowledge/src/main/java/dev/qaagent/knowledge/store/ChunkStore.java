@@ -63,6 +63,24 @@ public class ChunkStore {
         return id;
     }
 
+    public List<ListedDocument> listDocuments() {
+        return jdbc.query("""
+                SELECT d.id, d.title, d.source, d.uri, d.app, d.module, d.ingested_at,
+                       (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id) AS chunks
+                FROM documents d
+                ORDER BY d.ingested_at DESC NULLS LAST, d.title
+                """,
+                (rs, row) -> new ListedDocument(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("title"),
+                        rs.getString("source"),
+                        rs.getString("uri"),
+                        rs.getString("app"),
+                        rs.getString("module"),
+                        rs.getInt("chunks"),
+                        instant(rs, "ingested_at")));
+    }
+
     public List<RankedChunk> nearest(float[] query, SearchFilter filter, int limit) {
         SearchFilter.Query querySql = filter.where("c.embedding IS NOT NULL");
         String sql = """
@@ -159,5 +177,22 @@ public class ChunkStore {
     }
 
     public record StoredDocument(UUID id, String contentHash) {
+    }
+
+    public record ListedDocument(
+            UUID id,
+            String title,
+            String source,
+            String uri,
+            String app,
+            String module,
+            int chunks,
+            Instant ingestedAt
+    ) {
+    }
+
+    private static Instant instant(ResultSet rs, String column) throws SQLException {
+        Timestamp timestamp = rs.getTimestamp(column);
+        return timestamp == null ? null : timestamp.toInstant();
     }
 }
