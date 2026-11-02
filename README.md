@@ -87,7 +87,7 @@ Then open:
 
 `./mvnw verify` (or `.\mvnw.cmd verify`) now starts a temporary Postgres database inside Docker, so the Docker engine has to be running for the build as well as for the app. That check proves the new tables and the vector indexes are created.
 
-Copy `.env.example` to `.env` when you have an OpenAI key or sandbox credentials. The `local` profile does not need those keys. Postgres from Compose uses database `qa_agent`, user `qa_agent`, password `qa_agent` on port 5432. Redis is on port 6379.
+Copy `.env.example` to `.env` in the project folder when you have an OpenAI key or sandbox credentials. The app reads that file on each model call. A value already set in the app's terminal wins. A terminal opened later does not change an app that is already running. Saving `.env` does: the next review reads it. The `local` profile does not need those keys for search. Postgres from Compose uses database `qa_agent`, user `qa_agent`, password `qa_agent` on port 5432. Redis is on port 6379.
 
 The `client` profile is reserved and refuses to start.
 
@@ -101,7 +101,7 @@ Four notes ship in `knowledge-seed/`: who can be enrolled, a short glossary, wha
 
 Personal-looking values are swapped for tokens such as `[EMAIL]` and `[SSN]` before anything is saved or embedded. A business rule such as “a child under 26” or “effective date 2026-01-01” is left as written.
 
-With no `OPENAI_API_KEY`, search still works. The app builds a stand-in vector named `local-token-hash` from the words in the text, so shared words land near each other. Rankings will not match a real OpenAI embedding. Set `OPENAI_API_KEY` and restart to use `text-embedding-3-small` (1,536 numbers per chunk).
+With no `OPENAI_API_KEY`, search still works. The app builds a stand-in vector named `local-token-hash` from the words in the text, so shared words land near each other. Rankings will not match a real OpenAI embedding. When `OPENAI_API_KEY` is in the app's terminal or in `.env`, the next search uses `text-embedding-3-small` (1,536 numbers per chunk). Reindex after the key is present so the notes are stored with that model.
 
 Postgres from Compose has to be running. From the repository folder, with the app already started on port 8080:
 
@@ -137,7 +137,7 @@ The analyst reads one story plus the notes search finds, and writes a short revi
 
 The wording lives in `platform-agents/src/main/resources/prompts/story-analysis/v1.md`. The shape of the answer is `platform-core/src/main/resources/schemas/story-analysis-output.json`. If the answer does not match that shape, the analyst asks once more with the errors, then stops. If it cites a note that was not provided, it asks once more, then stops.
 
-The app still starts when `OPENAI_API_KEY` is empty. Asking the analyst to run then fails with a message to set the key and `OPENAI_CHAT_MODEL`. A priced example is `gpt-5-mini`. That model rejects every temperature except 1, so the client sends 1 for it and for the o-series models. Other models still receive 0.2. Prices for a few model names are in `platform-integrations/src/main/resources/llm-prices.yml`, taken from OpenAI's published token prices. Add a row if you choose a model that is not listed. Cost is recorded on each call.
+The app still starts when `OPENAI_API_KEY` is empty. Each review reads `OPENAI_API_KEY` and `OPENAI_CHAT_MODEL` at the moment of the call: the app's terminal, then `.env`, then the values seen at startup. If either one is still empty, that step fails and names the one to set. A priced example is `gpt-5-mini`. That model rejects every temperature except 1, so the client sends 1 for it and for the o-series models. Other models still receive 0.2. Prices for a few model names are in `platform-integrations/src/main/resources/llm-prices.yml`, taken from OpenAI's published token prices. Add a row if you choose a model that is not listed. Cost is recorded on each call.
 
 `./mvnw verify` does not call OpenAI. It uses a fake model. The real check is eight stories in `evals/story-analysis/`, including the three vague ones. It writes a report under `evals/reports/` and expects at least 7 of the 8 stories to pass.
 
@@ -157,7 +157,7 @@ Do not paste the key into a chat. The report lists pass or fail, the risk score,
 
 ## Drive a run from the screen
 
-Start Docker, the app, and the qTest stand-in the same way as below, with `OPENAI_API_KEY` and `OPENAI_CHAT_MODEL` set in the app window. In another window:
+Start Docker, the app, and the qTest stand-in the same way as below. Put `OPENAI_API_KEY` and `OPENAI_CHAT_MODEL` in that app's terminal, or in `.env` in the project folder. Open http://localhost:5173 on the same computer. A preview address hosted on another machine uses that machine's terminal and `.env`. In another window:
 
 ```powershell
 cd $HOME\AgenticPlatformDevelopment\frontend

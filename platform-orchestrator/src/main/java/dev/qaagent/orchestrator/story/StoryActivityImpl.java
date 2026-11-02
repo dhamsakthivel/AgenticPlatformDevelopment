@@ -280,7 +280,8 @@ public class StoryActivityImpl implements StoryActivities {
     private static boolean terminal(String message) {
         return message.contains("does not match schema")
                 || message.contains("cited chunk")
-                || message.contains("Set OPENAI_API_KEY");
+                || message.contains("Set OPENAI_API_KEY")
+                || message.contains("Set OPENAI_CHAT_MODEL");
     }
 
     @FunctionalInterface
