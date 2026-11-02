@@ -74,6 +74,9 @@ qaagent:
     url: ${ENROLLMENT_APP_URL:http://localhost:8092}
   temporal:
     target: ${TEMPORAL_TARGET:localhost:7233}
+    task-queue: qa-agents
+  platform:
+    auto-post-story-comment: ${AUTO_POST_STORY_COMMENT:true}
   prompts:
     active:
       story-analysis: v1

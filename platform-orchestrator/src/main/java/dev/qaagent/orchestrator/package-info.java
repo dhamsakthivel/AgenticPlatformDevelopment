@@ -1,5 +1,4 @@
 /**
- * Temporal workflows, activities, and worker configuration.
- * Phase 0 leaves this package empty. The workflow arrives in Phase 6.
+ * Temporal workflows, activities, and the run record.
  */
 package dev.qaagent.orchestrator;

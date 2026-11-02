@@ -12,7 +12,7 @@ public class OpenApiConfig {
     public OpenAPI platformOpenApi() {
         return new OpenAPI().info(new Info()
                 .title("QA Agentic Platform")
-                .description("HTTP API for the QA agentic platform. Phase 0 exposes the health check only.")
+                .description("HTTP API for the QA agentic platform. Start a story review with POST /api/runs.")
                 .version("0.1.0"));
     }
 }
