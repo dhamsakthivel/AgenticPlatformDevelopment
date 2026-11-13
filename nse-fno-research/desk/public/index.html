@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NSE F&O desk</title>
+  <style>
+    :root {
+      --paper: #f3efe6;
+      --panel: #fbf9f4;
+      --ink: #1a1814;
+      --muted: #6d655c;
+      --line: #d8d0c3;
+      --up: #1d6b3a;
+      --up-bg: #e6f3ea;
+      --down: #9a3412;
+      --down-bg: #f8ebe4;
+      --range: #5c5346;
+      --range-bg: #efe8dc;
+      --focus: #1a1814;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    button, input, textarea { font: inherit; color: inherit; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      padding: 22px 28px 16px;
+      border-bottom: 1px solid var(--ink);
+    }
+    .mast { letter-spacing: 0.14em; font-size: 12px; text-transform: uppercase; margin: 0 0 4px; }
+    h1 { font-family: Palatino, "Palatino Linotype", Georgia, serif; font-weight: 500; font-size: 34px; line-height: 1; margin: 0; }
+    .status { font-size: 13px; color: var(--muted); text-align: right; }
+    .status strong { color: var(--ink); font-weight: 600; }
+    main {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: calc(100vh - 92px);
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      padding: 20px;
+    }
+    section.board { padding: 20px 28px 40px; }
+    label { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .row { display: flex; gap: 8px; }
+    input[type="text"], textarea {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      padding: 9px 10px;
+    }
+    input[type="text"]:focus, textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+    textarea { min-height: 96px; resize: vertical; }
+    button {
+      background: var(--ink);
+      color: var(--paper);
+      border: 1px solid var(--ink);
+      border-radius: 2px;
+      padding: 9px 12px;
+      cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 22px; }
+    .chips button { background: transparent; color: var(--ink); padding: 4px 8px; font-size: 13px; }
+    .ask { margin-top: 8px; display: grid; gap: 8px; }
+    .hint { color: var(--muted); font-size: 13px; margin: 0; }
+    .head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 14px;
+    }
+    .name { font-family: Palatino, Georgia, serif; font-size: 28px; margin: 0; }
+    .sub { color: var(--muted); margin: 4px 0 0; }
+    .bias {
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+    }
+    .bias.up { color: var(--up); background: var(--up-bg); }
+    .bias.down { color: var(--down); background: var(--down-bg); }
+    .bias.range { color: var(--range); background: var(--range-bg); }
+    .price { font-variant-numeric: tabular-nums; font-size: 40px; margin: 16px 0 0; letter-spacing: -0.03em; }
+    .price span { font-size: 16px; margin-left: 8px; }
+    .up-text { color: var(--up); }
+    .down-text { color: var(--down); }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+    .metric { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; }
+    .metric b { display: block; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
+    .metric span { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .track-wrap { margin-top: 18px; }
+    .track { position: relative; height: 8px; background: #e4ddd1; margin: 28px 8px 8px; }
+    .mark { position: absolute; top: -5px; width: 2px; height: 18px; background: var(--ink); }
+    .mark.sma { background: #8a8175; height: 14px; top: -3px; }
+    .dot {
+      position: absolute;
+      top: -6px;
+      width: 14px;
+      height: 14px;
+      margin-left: -7px;
+      border-radius: 50%;
+      background: var(--ink);
+      border: 2px solid var(--paper);
+    }
+    .scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .banner { margin-top: 14px; padding: 8px 10px; background: var(--range-bg); border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    th:first-child, td:first-child { text-align: left; }
+    th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    h2 { font-family: Palatino, Georgia, serif; font-weight: 500; font-size: 22px; margin: 28px 0 8px; }
+    .note { background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; min-height: 72px; }
+    .note h3 { font-size: 16px; margin: 12px 0 4px; }
+    .note p { margin: 0 0 8px; }
+    .error { color: var(--down); }
+    .gap { color: var(--muted); font-size: 13px; margin-top: 18px; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      header { padding: 16px; }
+      section.board { padding: 16px; }
+      .price { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="mast">National Stock Exchange · futures and options</p>
+      <h1>Research desk</h1>
+    </div>
+    <p class="status" id="status">Checking the agent…</p>
+  </header>
+  <main>
+    <aside>
+      <form id="symbol-form">
+        <label for="symbol">Underlying</label>
+        <div class="row">
+          <input id="symbol" name="symbol" type="text" value="NIFTY" autocomplete="off" maxlength="32" />
+          <button type="submit">Load</button>
+        </div>
+      </form>
+      <div class="chips" id="chips"></div>
+      <form id="ask-form" class="ask">
+        <label for="question">Ask the agent</label>
+        <textarea id="question" placeholder="Write an NSE F&O research note. Cover published results, technicals, and the trend."></textarea>
+        <div class="row">
+          <button type="submit" id="ask">Write the note</button>
+          <button type="button" class="secondary" id="clear">New chat</button>
+        </div>
+        <p class="hint">The board uses the agent tools and does not need a model sign-in. The written note does.</p>
+      </form>
+    </aside>
+    <section class="board" id="board" aria-live="polite">
+      <p class="hint">Loading NIFTY…</p>
+    </section>
+  </main>
+  <script>
+    const chips = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "INDIAVIX", "RELIANCE", "HDFCBANK", "TCS", "INFY"];
+    const chipBox = document.querySelector("#chips");
+    const board = document.querySelector("#board");
+    const statusEl = document.querySelector("#status");
+    const symbolInput = document.querySelector("#symbol");
+    let session = null;
+    let streamAbort = null;
+
+    chips.forEach((name) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = name;
+      button.addEventListener("click", () => {
+        symbolInput.value = name;
+        loadSymbol(name);
+      });
+      chipBox.appendChild(button);
+    });
+
+    document.querySelector("#symbol-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      loadSymbol(symbolInput.value);
+    });
+    document.querySelector("#ask-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      askAgent();
+    });
+    document.querySelector("#clear").addEventListener("click", () => {
+      session = null;
+      if (streamAbort) streamAbort.abort();
+      const note = document.querySelector("#note");
+      if (note) note.innerHTML = "<p class='hint'>Chat cleared. The next question starts a new agent session.</p>";
+    });
+
+    function num(value, digits = 2) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+      return Number(value).toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    }
+    function signed(value) {
+      if (value === null || value === undefined) return "—";
+      const text = num(value);
+      return value > 0 ? `+${text}` : text;
+    }
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
+    }
+    function renderNote(text) {
+      return escapeHtml(text).split("\n").map((line) => {
+        const rich = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        if (line.startsWith("## ")) return `<h3>${rich.slice(3)}</h3>`;
+        if (line.startsWith("# ")) return `<h2>${rich.slice(2)}</h2>`;
+        if (!line.trim()) return "";
+        return `<p>${rich}</p>`;
+      }).join("");
+    }
+    function changeClass(value) {
+      if (value > 0) return "up-text";
+      if (value < 0) return "down-text";
+      return "";
+    }
+
+    async function loadSymbol(raw) {
+      const symbol = raw.trim();
+      if (!symbol) return;
+      symbolInput.value = symbol.toUpperCase();
+      board.innerHTML = `<p class="hint">Loading ${escapeHtml(symbolInput.value)}…</p>`;
+      try {
+        const response = await fetch("/api/research", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ symbol }),
+          signal: AbortSignal.timeout(45000),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures are loaded. Write the note to ask the agent.";
+        paint(payload.market?.result, payload.results?.result);
+      } catch (error) {
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
+      }
+    }
+
+    function paint(market, results) {
+      if (!market || market.ok === false) {
+        board.innerHTML = `<p class="error">${escapeHtml(market?.error || "No technicals.")}</p>`;
+        return;
+      }
+      const change = market.dayChangePercent;
+      const low = market.fiftyTwoWeekLow;
+      const high = market.fiftyTwoWeekHigh;
+      const span = high !== null && low !== null ? high - low : 0;
+      const pos = (value) => (span > 0 && value !== null ? Math.min(100, Math.max(0, ((value - low) / span) * 100)) : null);
+      const pricePos = pos(market.price);
+      const sma20Pos = pos(market.sma20);
+      const sma50Pos = pos(market.sma50);
+      const history = results && results.applicable ? results.history || [] : [];
+      const rows = history.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.quarter || "—")}</td>
+          <td>${num(row.epsActual)}</td>
+          <td>${num(row.epsEstimate)}</td>
+          <td class="${changeClass(row.surprisePercent)}">${signed(row.surprisePercent)}%</td>
+        </tr>`).join("");
+      const resultsBlock = !results
+        ? ""
+        : results.ok === false
+          ? `<h2>Published results</h2><p class="error">${escapeHtml(results.error)}</p>`
+          : results.applicable
+            ? `<h2>Published results</h2>
+               <p class="hint">Most recent quarter ${escapeHtml(results.mostRecentQuarter || "—")} · trailing EPS ${num(results.trailingEps)} · forward P/E ${num(results.forwardPe)} · quarterly earnings growth ${signed(results.quarterlyEarningsGrowthPercent)}%</p>
+               <table>
+                 <thead><tr><th>Quarter</th><th>EPS actual</th><th>Estimate</th><th>Surprise</th></tr></thead>
+                 <tbody>${rows || "<tr><td colspan='4'>No quarterly history in this feed.</td></tr>"}</tbody>
+               </table>
+               <p>Next earnings ${escapeHtml(results.nextEarnings?.date || "—")}${results.nextEarnings?.isEstimate ? " (estimated date)" : ""}. Current-quarter EPS estimate ${num(results.currentQuarter?.epsEstimate)}.</p>
+               <p class="hint">Analyst figures are third-party estimates, not NSE filings. Surprise is the percent gap versus the estimate.</p>`
+            : `<h2>Published results</h2><p>${escapeHtml(results.reason || "Company results do not apply.")}</p>`;
+      const marks = [
+        sma20Pos === null ? "" : `<span class="mark sma" style="left:${sma20Pos}%" title="SMA20"></span>`,
+        sma50Pos === null ? "" : `<span class="mark sma" style="left:${sma50Pos}%" title="SMA50"></span>`,
+        pricePos === null ? "" : `<span class="dot" style="left:${pricePos}%" title="Last price"></span>`,
+      ].join("");
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">${escapeHtml(market.name || market.symbol)}</h2>
+            <p class="sub">${escapeHtml(market.yahooSymbol)} · ${escapeHtml(market.asOf || "time unavailable")} · ${escapeHtml(market.currency || "")}</p>
+          </div>
+          <div class="bias ${escapeHtml(market.trend)}">${escapeHtml(market.trend)}</div>
+        </div>
+        <p class="price">${num(market.price)} <span class="${changeClass(change)}">${signed(change)}% today</span></p>
+        <p class="sub">${escapeHtml(market.trendDetail || "")}</p>
+        ${market.corporateAction ? `<p class="banner">${escapeHtml(market.corporateAction)}</p>` : ""}
+        <div class="metrics">
+          <div class="metric"><span>SMA 20</span><b>${num(market.sma20)}</b></div>
+          <div class="metric"><span>SMA 50</span><b>${num(market.sma50)}</b></div>
+          <div class="metric"><span>RSI 14</span><b>${num(market.rsi14, 1)}</b></div>
+          <div class="metric"><span>21-session return</span><b>${signed(market.return21d)}%</b></div>
+          <div class="metric"><span>5-session return</span><b>${signed(market.return5d)}%</b></div>
+          <div class="metric"><span>63-session return</span><b>${signed(market.return63d)}%</b></div>
+          <div class="metric"><span>20-session vol</span><b>${num(market.realizedVol20d, 1)}%</b></div>
+          <div class="metric"><span>Day range</span><b>${num(market.dayLow)}–${num(market.dayHigh)}</b></div>
+        </div>
+        <div class="track-wrap">
+          <div class="track">${marks}</div>
+          <div class="scale"><span>52-week low ${num(low)}</span><span>20 sessions ${num(market.range20?.low)}–${num(market.range20?.high)}</span><span>52-week high ${num(high)}</span></div>
+        </div>
+        ${resultsBlock}
+        <h2>Agent note</h2>
+        <div class="note" id="note"><p class="hint">Use “Write the note” to ask the agent. The figures above already come from its tools.</p></div>
+        <p class="gap">Outside this feed: ${(market.coverage?.notIncluded || []).map(escapeHtml).join(", ")}. ${escapeHtml(market.coverage?.priceDelay || "")} This is research context, not investment advice or a trade recommendation.</p>
+      `;
+    }
+
+    async function askAgent() {
+      const symbol = symbolInput.value.trim() || "the selected underlying";
+      const custom = document.querySelector("#question").value.trim();
+      const message = custom || `Write an NSE F&O research note for ${symbol}. Cover published results, technical analysis, and the overall trend.`;
+      const note = document.querySelector("#note");
+      const button = document.querySelector("#ask");
+      button.disabled = true;
+      if (note) note.innerHTML = "<p class='hint'>The agent is writing…</p>";
+      try {
+        const response = await fetch("/api/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            message,
+            sessionId: session?.sessionId,
+            continuationToken: session?.continuationToken,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) {
+          throw new Error(payload.message || payload.error || "The agent did not start a session.");
+        }
+        session = {
+          sessionId: payload.sessionId || session?.sessionId,
+          continuationToken: payload.continuationToken || session?.continuationToken,
+        };
+        await readStream(session.sessionId);
+      } catch (error) {
+        if (note) note.innerHTML = `<p class="error">${escapeHtml(error.message || "The request failed.")}</p>`;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function readStream(sessionId) {
+      if (streamAbort) streamAbort.abort();
+      streamAbort = new AbortController();
+      const note = document.querySelector("#note");
+      const response = await fetch(`/api/stream?sessionId=${encodeURIComponent(sessionId)}&startIndex=0`, {
+        signal: streamAbort.signal,
+      });
+      if (!response.ok || !response.body) {
+        throw new Error("The agent stream did not open.");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let text = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event;
+          try { event = JSON.parse(line); } catch { continue; }
+          if (event.type === "message.appended" || event.type === "message.completed") {
+            text = event.data?.text || text;
+            if (note) note.innerHTML = renderNote(text);
+          }
+          if (event.type === "actions.requested" && note && !text) {
+            const names = (event.data?.calls || []).map((call) => call.name || call.toolName).filter(Boolean);
+            if (names.length) note.innerHTML = `<p class="hint">Calling ${escapeHtml(names.join(", "))}…</p>`;
+          }
+          if (event.type === "turn.failed" || event.type === "session.failed") {
+            const message = event.data?.message || "The turn failed.";
+            if (note) note.innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+            return;
+          }
+          if (event.type === "turn.completed") return;
+        }
+      }
+    }
+
+    fetch("/api/health").then((response) => response.json()).then(() => {
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading figures…";
+    }).catch(() => {
+      statusEl.textContent = "Desk status unavailable. Stop the window with Ctrl+C and run npm run desk again.";
+    });
+    loadSymbol("NIFTY");
+  </script>
+</body>
+</html>
