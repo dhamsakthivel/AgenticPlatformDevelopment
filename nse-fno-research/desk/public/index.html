@@ -239,19 +239,24 @@
       const symbol = raw.trim();
       if (!symbol) return;
       symbolInput.value = symbol.toUpperCase();
-      board.innerHTML = `<p class="hint">Loading ${escapeHtml(symbolInput.value)} from the agent…</p>`;
-      const response = await fetch("/api/research", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ symbol }),
-      });
-      const payload = await response.json();
-      if (!response.ok || !payload.ok) {
-        board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The agent did not return research.")}</p>`;
-        return;
+      board.innerHTML = `<p class="hint">Loading ${escapeHtml(symbolInput.value)}…</p>`;
+      try {
+        const response = await fetch("/api/research", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ symbol }),
+          signal: AbortSignal.timeout(45000),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures are loaded. Write the note to ask the agent.";
+        paint(payload.market?.result, payload.results?.result);
+      } catch (error) {
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
       }
-      statusEl.innerHTML = "<strong>Agent connected</strong><br />Tools are ready on this machine.";
-      paint(payload.market?.result, payload.results?.result);
     }
 
     function paint(market, results) {
@@ -402,12 +407,10 @@
       }
     }
 
-    fetch("/api/health").then((response) => response.json()).then((health) => {
-      statusEl.innerHTML = health.ok
-        ? "<strong>Agent connected</strong><br />Tools are ready on this machine."
-        : "<strong>Agent starting</strong><br />The first load opens it.";
+    fetch("/api/health").then((response) => response.json()).then(() => {
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading figures…";
     }).catch(() => {
-      statusEl.textContent = "Desk status unavailable.";
+      statusEl.textContent = "Desk status unavailable. Stop the window with Ctrl+C and run npm run desk again.";
     });
     loadSymbol("NIFTY");
   </script>

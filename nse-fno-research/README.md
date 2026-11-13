@@ -17,8 +17,10 @@ Supported index names: `NIFTY`, `BANKNIFTY`, `FINNIFTY`, `MIDCPNIFTY`, `INDIAVIX
 1. Open a terminal in this folder.
 2. Run `npm run desk`.
 3. Open http://127.0.0.1:4173.
-4. Load a symbol. The board calls the agent tools `market_technicals` and `published_results`.
+4. Load a symbol. The board reads the same quote and results code the agent tools use.
 5. Choose **Write the note** for the agent's written research. That step needs `npx --yes "@grok/agent-sdk@0.6.0" login`.
+
+Stop an old desk with Ctrl+C before you start it again. `npm run desk` must run inside this folder, not in your home directory.
 
 The desk listens on `127.0.0.1:4173` and starts the agent on `127.0.0.1:3921` when it is not already running. Set `DESK_PORT`, `AGENT_PORT`, or `AGENT_URL` to use other addresses.
 

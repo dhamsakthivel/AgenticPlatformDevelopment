@@ -1,9 +1,10 @@
 // Local research desk. It serves the page and proxies to this agent.
 import { spawn } from "node:child_process";
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import ts from "typescript";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(here, "..");
@@ -14,6 +15,22 @@ const agentUrl = (process.env.AGENT_URL || `http://127.0.0.1:${agentPort}`).repl
 
 let agentChild = null;
 let agentLog = "";
+let marketModule = null;
+
+async function loadMarket() {
+  if (marketModule) return marketModule;
+  const sourcePath = path.join(projectDir, "bot", "lib", "market.ts");
+  const source = readFileSync(sourcePath, "utf8");
+  const js = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
+    fileName: sourcePath,
+  }).outputText;
+  const file = path.join(here, ".cache", "market.mjs");
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, js);
+  marketModule = await import(pathToFileURL(file).href);
+  return marketModule;
+}
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
@@ -69,10 +86,10 @@ async function ensureAgent() {
     throw new Error(`The agent at ${agentUrl} is not responding.`);
   }
   if (agentChild) return waitForAgent();
-  const bin = path.join(projectDir, "node_modules", ".bin", "agent-sdk");
-  const command = existsSync(bin) ? bin : "npx";
-  const args = existsSync(bin)
-    ? []
+  const cli = path.join(projectDir, "node_modules", "@grok/agent-sdk", "dist", "bin", "agent-serve.js");
+  const command = existsSync(cli) ? process.execPath : "npx";
+  const args = existsSync(cli)
+    ? [cli]
     : ["--yes", "@grok/agent-sdk@0.6.0"];
   args.push(
     "serve",
@@ -88,44 +105,45 @@ async function ensureAgent() {
     "--no-playground",
     "--no-docs",
   );
+  let spawnError = null;
   agentChild = spawn(command, args, {
     cwd: projectDir,
     stdio: ["ignore", "pipe", "pipe"],
     env: process.env,
+    windowsHide: true,
   });
   const remember = (chunk) => {
     agentLog = (agentLog + chunk.toString()).slice(-2000);
   };
   agentChild.stdout.on("data", remember);
   agentChild.stderr.on("data", remember);
+  agentChild.on("error", (error) => {
+    spawnError = error;
+    agentLog = (agentLog + "\n" + error.message).slice(-2000);
+    agentChild = null;
+  });
   agentChild.on("exit", () => {
     agentChild = null;
   });
-  await waitForAgent();
-}
-
-async function waitForAgent() {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
+    if (spawnError) throw new Error(`The agent did not start. ${spawnError.message}`);
     if (await agentReachable()) return;
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
   throw new Error(`The agent did not open its HTTP port in time. ${agentLog.trim()}`.trim());
 }
 
-async function callTool(name, symbol) {
-  const response = await fetch(`${agentUrl}/v1/tools/${name}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ input: { symbol } }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = body?.message || body?.error || `The agent returned HTTP ${response.status}.`;
-    throw Object.assign(new Error(message), { status: response.status });
+async function waitForAgent() {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (!agentChild && agentLog) {
+      throw new Error(`The agent did not start. ${agentLog.trim()}`);
+    }
+    if (await agentReachable()) return;
+    await new Promise((resolve) => setTimeout(resolve, 400));
   }
-  return body;
+  throw new Error(`The agent did not open its HTTP port in time. ${agentLog.trim()}`.trim());
 }
 
 async function proxyStream(req, res, sessionId, startIndex) {
@@ -164,22 +182,26 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/health") {
-      sendJson(res, 200, { ok: await agentReachable(), agentUrl });
+      sendJson(res, 200, { ok: true });
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/research") {
-      await ensureAgent();
       const body = await readBody(req);
       const symbol = typeof body.symbol === "string" ? body.symbol.trim() : "";
       if (!symbol) {
         sendJson(res, 400, { ok: false, error: "Enter a symbol." });
         return;
       }
-      const [market, results] = await Promise.all([
-        callTool("market_technicals", symbol),
-        callTool("published_results", symbol),
+      const market = await loadMarket();
+      const [technicals, results] = await Promise.all([
+        market.marketTechnicals(symbol),
+        market.publishedResults(symbol),
       ]);
-      sendJson(res, 200, { ok: true, market, results });
+      sendJson(res, 200, {
+        ok: true,
+        market: { result: technicals },
+        results: { result: results },
+      });
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/session") {
