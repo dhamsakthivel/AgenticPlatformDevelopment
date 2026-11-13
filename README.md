@@ -2,4 +2,4 @@
 
 ## NSE F&O research
 
-The first agent is in [`nse-fno-research`](nse-fno-research/README.md). That README is the way to run it locally.
+The first agent is in [`nse-fno-research`](nse-fno-research/README.md). Run `npm run desk` in that folder and open http://127.0.0.1:4173.

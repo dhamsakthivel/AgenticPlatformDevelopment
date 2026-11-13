@@ -555,7 +555,7 @@ export async function publishedResults(input: string): Promise<PublishedResults 
         }
       : null,
     reason: null,
-    note: "Analyst figures are third-party estimates, not NSE filings. surprisePercent is the percent gap versus the Yahoo estimate.",
+    note: "Analyst figures are third-party estimates, not NSE filings. Surprise is the percent gap versus the Yahoo estimate.",
     coverage,
   };
 }

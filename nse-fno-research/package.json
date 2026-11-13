@@ -5,7 +5,8 @@
   "description": "NSE F&O research notes: published results, technicals, and trend.",
   "scripts": {
     "check": "tsc --noEmit",
-    "dev": "agent-sdk dev"
+    "dev": "agent-sdk dev",
+    "desk": "node desk/server.mjs"
   },
   "dependencies": {
     "@grok/agent-sdk": "^0.6.0",
