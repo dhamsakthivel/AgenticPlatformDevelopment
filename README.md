@@ -39,14 +39,40 @@ The backtest fills a stop at the stop, or at the open if price gaps through it. 
 
 ## Run it
 
+On macOS or Linux:
+
 ```bash
-python -m venv .venv
+git clone https://github.com/dhamsakthivel/AgenticPlatformDevelopment.git
+cd AgenticPlatformDevelopment
+git checkout cursor/nse-swing-bot-87b1
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
-
 nse-swing goal
 nse-swing backtest --demo
+```
+
+On Windows PowerShell, run one line at a time from a folder that contains this repo. `source` and `python3` are not PowerShell commands, and `C:\Users\patel` is not the project until you clone it and `cd` into it.
+
+```powershell
+cd $HOME
+git clone https://github.com/dhamsakthivel/AgenticPlatformDevelopment.git
+cd AgenticPlatformDevelopment
+git checkout cursor/nse-swing-bot-87b1
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python -m pytest
+nse-swing goal
+nse-swing backtest --demo
+```
+
+If `py` is not found, install Python 3.11 or newer from [python.org](https://www.python.org/downloads/windows/) and tick "Add python.exe to PATH", then close and reopen PowerShell. If activation is blocked, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` once in that window and run the Activate line again.
+
+Then, with the environment activated:
+
+```bash
 nse-swing backtest --years 8 --universe liquid10
 nse-swing backtest --years 8
 nse-swing scan --capital 100000
