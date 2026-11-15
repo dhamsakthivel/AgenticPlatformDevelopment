@@ -256,7 +256,7 @@
           board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
           return;
         }
-        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, news, and bulk deals are loaded.";
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, news, bulk deals, and large deals are loaded.";
         paint(payload.market?.result, payload.results?.result, payload.brief);
       } catch (error) {
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
@@ -276,10 +276,10 @@
     function briefBlock(brief) {
       if (!brief) return "";
       if (brief.ok === false) {
-        return `<h2>News and bulk deals</h2><p class="error">${escapeHtml(brief.error || "Moneycontrol did not answer.")}</p>`;
+        return `<h2>News and deals</h2><p class="error">${escapeHtml(brief.error || "Moneycontrol did not answer.")}</p>`;
       }
       if (!brief.applicable) {
-        return `<h2>News and bulk deals</h2><p>${escapeHtml(brief.reason || "Not available for this symbol.")}</p>`;
+        return `<h2>News and deals</h2><p>${escapeHtml(brief.reason || "Not available for this symbol.")}</p>`;
       }
       const articles = (brief.news || []).map((item) => {
         const href = safeLink(item.url);
@@ -302,13 +302,33 @@
              <tbody>${deals}</tbody>
            </table>`
         : `<p>Moneycontrol shows no bulk deals in ${escapeHtml(brief.bulkWindow || "the last 5 days")}.</p>`;
+      const largeRows = (brief.largeDeals || []).map((deal) => `
+        <tr>
+          <td>${escapeHtml(deal.date || "—")}</td>
+          <td>${escapeHtml(deal.time || "—")}</td>
+          <td>${escapeHtml(deal.exchange || "—")}</td>
+          <td>${num(deal.quantity, 0)}</td>
+          <td>${num(deal.price)}</td>
+          <td>${deal.valueCrore === null || deal.valueCrore === undefined ? "—" : num(deal.valueCrore, 0)}</td>
+        </tr>`).join("");
+      const largeTable = brief.largeError
+        ? `<p class="error">${escapeHtml(brief.largeError)}</p>`
+        : largeRows
+          ? `<table>
+               <thead><tr><th>Date</th><th>Time</th><th>Exchange</th><th>Quantity</th><th>Price</th><th>Value (Rs cr)</th></tr></thead>
+               <tbody>${largeRows}</tbody>
+             </table>`
+          : `<p>Moneycontrol shows no large deals in ${escapeHtml(brief.bulkWindow || "the last 5 days")}.</p>`;
       return `
         <h2>Latest news</h2>
         <p class="hint">Source: Moneycontrol${brief.name ? " · " + escapeHtml(brief.name) : ""}</p>
         ${articles ? `<ul class="news-list">${articles}</ul>` : "<p>Moneycontrol returned no headlines.</p>"}
         <h2>Bulk deals, last 5 days</h2>
         <p class="hint">${escapeHtml(brief.bulkNote || "")} Window: ${escapeHtml(brief.bulkWindow || "last 5 days")}. <a href="https://www.moneycontrol.com/markets/stock-deals/bulk-deals/" target="_blank" rel="noopener noreferrer">Moneycontrol bulk deals</a></p>
-        ${dealTable}`;
+        ${dealTable}
+        <h2>Large deals, last 5 days</h2>
+        <p class="hint">Big prints Moneycontrol lists on its large-deals page. Value is rupee crore, as they report it. Window: ${escapeHtml(brief.bulkWindow || "last 5 days")}. <a href="https://www.moneycontrol.com/markets/stock-deals/large-deals/" target="_blank" rel="noopener noreferrer">Moneycontrol large deals</a></p>
+        ${largeTable}`;
     }
     function paint(market, results, brief) {
       if (!market || market.ok === false) {

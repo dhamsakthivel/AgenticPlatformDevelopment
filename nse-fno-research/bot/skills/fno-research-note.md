@@ -21,6 +21,7 @@ Technicals: SMA20 <sma20>, SMA50 <sma50>, RSI14 <rsi14>, 5-session return <retur
 Results: for a stock, list each quarter with EPS actual, EPS estimate, and surprisePercent, then the next earnings date and whether that date is an estimate. For an index, say company results do not apply.
 News: list each Moneycontrol headline with its date. Do not add headlines the tool did not return.
 Bulk deals: list each Moneycontrol bulk deal inside `bulkWindow` with client, side, quantity, and price. If `bulkDeals` is empty, say Moneycontrol shows none in that window.
+Large deals: list each Moneycontrol large deal inside `bulkWindow` with time, exchange, quantity, price, and value in rupee crore. If there are more than 8, state the count and list the 8 largest by `valueCrore`. If `largeDeals` is empty, say Moneycontrol shows none in that window. If `largeError` is set, quote it.
 Outside this feed: option chain, open interest, put-call ratio, futures basis, lot size, and the F&O ban list.
 What would change the view: one sentence tied to SMA20 or the 20-session range.
 

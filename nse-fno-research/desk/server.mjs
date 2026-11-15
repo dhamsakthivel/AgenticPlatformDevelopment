@@ -204,7 +204,7 @@ const server = createServer(async (req, res) => {
               ok: true,
               applicable: false,
               symbol: resolved.input,
-              reason: "An index does not have company news or bulk deals. Ask for an NSE stock symbol.",
+              reason: "An index does not have company news, bulk deals, or large deals. Ask for an NSE stock symbol.",
             })
           : moneycontrol.companyBrief(resolved.input);
       const [technicals, results, brief] = await Promise.all([

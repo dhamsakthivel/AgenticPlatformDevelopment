@@ -6,7 +6,7 @@ import { companyBrief } from "../lib/moneycontrol.js";
 
 export default defineTool({
   description: prompt`
-    Load Moneycontrol headlines and bulk deals from the last 5 calendar days for one NSE stock.
+    Load Moneycontrol headlines, bulk deals, and large deals from the last 5 calendar days for one NSE stock.
     Skip indexes such as NIFTY. Use only the headlines and deals this tool returns.
   `,
   inputSchema: z.object({
@@ -21,7 +21,7 @@ export default defineTool({
         ok: true as const,
         applicable: false as const,
         symbol: resolved.input,
-        reason: "An index does not have company news or bulk deals. Ask for an NSE stock symbol.",
+        reason: "An index does not have company news, bulk deals, or large deals. Ask for an NSE stock symbol.",
       };
     }
     try {

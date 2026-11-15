@@ -1,6 +1,7 @@
 // Moneycontrol public JSON used by their stock pages.
 // News: /mcapi/v1/stock/news
 // Bulk deals: /mcapi/v1/extdata/mc-bulk-data
+// Large deals: /mcapi/v1/stock/large-deals
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -36,6 +37,15 @@ export type BulkDeal = {
   percentTraded: number | null;
 };
 
+export type LargeDeal = {
+  date: string;
+  time: string;
+  exchange: string;
+  quantity: number | null;
+  price: number | null;
+  valueCrore: number | null;
+};
+
 export type CompanyBrief = {
   ok: true;
   applicable: true;
@@ -46,8 +56,11 @@ export type CompanyBrief = {
   bulkDeals: BulkDeal[];
   bulkWindow: string;
   bulkNote: string;
+  largeDeals: LargeDeal[];
+  largeError: string | null;
   source: "Moneycontrol";
   dealsPage: string;
+  largeDealsPage: string;
 };
 
 type BriefFailure = { ok: false; symbol?: string; error: string };
@@ -195,6 +208,28 @@ async function loadBulkDeals(scId: string, fromIso: string): Promise<{ deals: Bu
   return { deals, note };
 }
 
+async function loadLargeDeals(scId: string, fromIso: string): Promise<LargeDeal[]> {
+  const body = await getJson(`${API}/mcapi/v1/stock/large-deals?scId=${encodeURIComponent(scId)}`);
+  const data = record(body)?.data;
+  const rows = Array.isArray(data) ? data : [];
+  const deals: LargeDeal[] = [];
+  for (const row of rows) {
+    const item = record(row);
+    const display = str(item?.date);
+    const iso = display ? parseDisplayDate(display) : null;
+    if (!iso || iso < fromIso) continue;
+    deals.push({
+      date: display ?? iso,
+      time: str(item?.time) ?? "",
+      exchange: str(item?.exchange) ?? "",
+      quantity: num(item?.qty),
+      price: num(item?.price),
+      valueCrore: num(item?.value),
+    });
+  }
+  return deals;
+}
+
 export async function companyBrief(symbol: string): Promise<CompanyBrief | BriefFailure | NotStock> {
   const ticker = symbol.trim().toUpperCase();
   try {
@@ -205,7 +240,17 @@ export async function companyBrief(symbol: string): Promise<CompanyBrief | Brief
       return { ok: false, symbol: ticker, error: `Moneycontrol has no stock match for ${ticker}.` };
     }
     const fromIso = shiftIso(istToday(), -4);
-    const [news, bulk] = await Promise.all([loadNews(match.id), loadBulkDeals(match.id, fromIso)]);
+    const [news, bulk, large] = await Promise.all([
+      loadNews(match.id),
+      loadBulkDeals(match.id, fromIso),
+      loadLargeDeals(match.id, fromIso).then(
+        (deals) => ({ deals, error: null as string | null }),
+        (error: unknown) => ({
+          deals: [] as LargeDeal[],
+          error: error instanceof Error ? error.message : "Moneycontrol large deals did not load.",
+        }),
+      ),
+    ]);
     return {
       ok: true,
       applicable: true,
@@ -216,8 +261,11 @@ export async function companyBrief(symbol: string): Promise<CompanyBrief | Brief
       bulkDeals: bulk.deals,
       bulkWindow: `${fromIso} to ${istToday()} (Asia/Kolkata)`,
       bulkNote: bulk.note,
+      largeDeals: large.deals,
+      largeError: large.error,
       source: "Moneycontrol",
       dealsPage: "https://www.moneycontrol.com/markets/stock-deals/bulk-deals/",
+      largeDealsPage: "https://www.moneycontrol.com/markets/stock-deals/large-deals/",
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Moneycontrol request failed.";
