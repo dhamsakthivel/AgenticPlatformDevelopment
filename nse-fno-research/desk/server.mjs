@@ -15,21 +15,23 @@ const agentUrl = (process.env.AGENT_URL || `http://127.0.0.1:${agentPort}`).repl
 
 let agentChild = null;
 let agentLog = "";
-let marketModule = null;
+const modules = new Map();
 
-async function loadMarket() {
-  if (marketModule) return marketModule;
-  const sourcePath = path.join(projectDir, "bot", "lib", "market.ts");
+async function loadModule(rel) {
+  const cached = modules.get(rel);
+  if (cached) return cached;
+  const sourcePath = path.join(projectDir, rel);
   const source = readFileSync(sourcePath, "utf8");
   const js = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
     fileName: sourcePath,
   }).outputText;
-  const file = path.join(here, ".cache", "market.mjs");
+  const file = path.join(here, ".cache", rel.replace(/[\\/]/g, "_").replace(/\.ts$/, ".mjs"));
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, js);
-  marketModule = await import(pathToFileURL(file).href);
-  return marketModule;
+  const loaded = await import(pathToFileURL(file).href);
+  modules.set(rel, loaded);
+  return loaded;
 }
 
 function sendJson(res, status, body) {
@@ -192,15 +194,29 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, error: "Enter a symbol." });
         return;
       }
-      const market = await loadMarket();
-      const [technicals, results] = await Promise.all([
+      const market = await loadModule("bot/lib/market.ts");
+      const moneycontrol = await loadModule("bot/lib/moneycontrol.ts");
+      const resolved = market.resolveSymbol(symbol);
+      const briefPromise = "ok" in resolved
+        ? Promise.resolve(resolved)
+        : resolved.kind === "index"
+          ? Promise.resolve({
+              ok: true,
+              applicable: false,
+              symbol: resolved.input,
+              reason: "An index does not have company news or bulk deals. Ask for an NSE stock symbol.",
+            })
+          : moneycontrol.companyBrief(resolved.input);
+      const [technicals, results, brief] = await Promise.all([
         market.marketTechnicals(symbol),
         market.publishedResults(symbol),
+        briefPromise,
       ]);
       sendJson(res, 200, {
         ok: true,
         market: { result: technicals },
         results: { result: results },
+        brief,
       });
       return;
     }

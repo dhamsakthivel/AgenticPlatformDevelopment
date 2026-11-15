@@ -131,6 +131,10 @@
     .note p { margin: 0 0 8px; }
     .error { color: var(--down); }
     .gap { color: var(--muted); font-size: 13px; margin-top: 18px; }
+    .news-list { list-style: none; padding: 0; margin: 8px 0 0; }
+    .news-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .news-list a { color: var(--ink); }
+    .news-list span { display: block; color: var(--muted); font-size: 12px; }
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
       aside { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -252,14 +256,61 @@
           board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
           return;
         }
-        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures are loaded. Write the note to ask the agent.";
-        paint(payload.market?.result, payload.results?.result);
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, news, and bulk deals are loaded.";
+        paint(payload.market?.result, payload.results?.result, payload.brief);
       } catch (error) {
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
       }
     }
 
-    function paint(market, results) {
+    function safeLink(url) {
+      if (typeof url !== "string") return "";
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "https:" || !parsed.hostname.endsWith("moneycontrol.com")) return "";
+        return parsed.href;
+      } catch {
+        return "";
+      }
+    }
+    function briefBlock(brief) {
+      if (!brief) return "";
+      if (brief.ok === false) {
+        return `<h2>News and bulk deals</h2><p class="error">${escapeHtml(brief.error || "Moneycontrol did not answer.")}</p>`;
+      }
+      if (!brief.applicable) {
+        return `<h2>News and bulk deals</h2><p>${escapeHtml(brief.reason || "Not available for this symbol.")}</p>`;
+      }
+      const articles = (brief.news || []).map((item) => {
+        const href = safeLink(item.url);
+        const title = escapeHtml(item.headline || "Untitled");
+        const label = href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${title}</a>` : title;
+        return `<li>${label}<span>${escapeHtml(item.date || "Moneycontrol")}</span></li>`;
+      }).join("");
+      const deals = (brief.bulkDeals || []).map((deal) => `
+        <tr>
+          <td>${escapeHtml(deal.date || "—")}</td>
+          <td>${escapeHtml(deal.client || "—")}</td>
+          <td>${escapeHtml(deal.side || "—")}</td>
+          <td>${num(deal.quantity, 0)}</td>
+          <td>${num(deal.price)}</td>
+          <td>${deal.percentTraded === null || deal.percentTraded === undefined ? "—" : num(deal.percentTraded)}%</td>
+        </tr>`).join("");
+      const dealTable = deals
+        ? `<table>
+             <thead><tr><th>Date</th><th>Client</th><th>Side</th><th>Quantity</th><th>Price</th><th>% of equity</th></tr></thead>
+             <tbody>${deals}</tbody>
+           </table>`
+        : `<p>Moneycontrol shows no bulk deals in ${escapeHtml(brief.bulkWindow || "the last 5 days")}.</p>`;
+      return `
+        <h2>Latest news</h2>
+        <p class="hint">Source: Moneycontrol${brief.name ? " · " + escapeHtml(brief.name) : ""}</p>
+        ${articles ? `<ul class="news-list">${articles}</ul>` : "<p>Moneycontrol returned no headlines.</p>"}
+        <h2>Bulk deals, last 5 days</h2>
+        <p class="hint">${escapeHtml(brief.bulkNote || "")} Window: ${escapeHtml(brief.bulkWindow || "last 5 days")}. <a href="https://www.moneycontrol.com/markets/stock-deals/bulk-deals/" target="_blank" rel="noopener noreferrer">Moneycontrol bulk deals</a></p>
+        ${dealTable}`;
+    }
+    function paint(market, results, brief) {
       if (!market || market.ok === false) {
         board.innerHTML = `<p class="error">${escapeHtml(market?.error || "No technicals.")}</p>`;
         return;
@@ -325,6 +376,7 @@
           <div class="scale"><span>52-week low ${num(low)}</span><span>20 sessions ${num(market.range20?.low)}–${num(market.range20?.high)}</span><span>52-week high ${num(high)}</span></div>
         </div>
         ${resultsBlock}
+        ${briefBlock(brief)}
         <h2>Agent note</h2>
         <div class="note" id="note"><p class="hint">Use “Write the note” to ask the agent. The figures above already come from its tools.</p></div>
         <p class="gap">Outside this feed: ${(market.coverage?.notIncluded || []).map(escapeHtml).join(", ")}. ${escapeHtml(market.coverage?.priceDelay || "")} This is research context, not investment advice or a trade recommendation.</p>
