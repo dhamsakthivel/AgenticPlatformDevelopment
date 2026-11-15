@@ -131,6 +131,12 @@
     .note p { margin: 0 0 8px; }
     .error { color: var(--down); }
     .gap { color: var(--muted); font-size: 13px; margin-top: 18px; }
+    .rules { list-style: none; padding: 0; margin: 8px 0 0; }
+    .rules li { display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .rules b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .rules li small { grid-column: 2; color: var(--muted); font-size: 13px; }
+    .rules li.pass b { color: var(--up); }
+    .rules li.fail b { color: var(--down); }
     .news-list { list-style: none; padding: 0; margin: 8px 0 0; }
     .news-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     .news-list a { color: var(--ink); }
@@ -256,8 +262,8 @@
           board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
           return;
         }
-        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, news, bulk deals, and large deals are loaded.";
-        paint(payload.market?.result, payload.results?.result, payload.brief);
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, the Stage 2 screen, news, and deals are loaded.";
+        paint(payload.market?.result, payload.results?.result, payload.brief, payload.screen);
       } catch (error) {
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
       }
@@ -330,7 +336,39 @@
         <p class="hint">Big prints Moneycontrol lists on its large-deals page. Value is rupee crore, as they report it. Window: ${escapeHtml(brief.bulkWindow || "last 5 days")}. <a href="https://www.moneycontrol.com/markets/stock-deals/large-deals/" target="_blank" rel="noopener noreferrer">Moneycontrol large deals</a></p>
         ${largeTable}`;
     }
-    function paint(market, results, brief) {
+    function ruleList(rules) {
+      return `<ul class="rules">${(rules || []).map((rule) => `
+        <li class="${rule.pass ? "pass" : "fail"}">
+          <b>${rule.pass ? "Pass" : "Fail"}</b>
+          <span>${escapeHtml(rule.label || "")}</span>
+          <small>${escapeHtml(rule.detail || "")}</small>
+        </li>`).join("")}</ul>`;
+    }
+    function stageBlock(screen) {
+      if (!screen) return "";
+      if (screen.ok === false) {
+        return `<h2>Stage 2 screen</h2><p class="error">${escapeHtml(screen.error || "The screen did not load.")}</p>`;
+      }
+      if (!screen.applicable) {
+        return `<h2>Stage 2 screen</h2><p>${escapeHtml(screen.reason || "Not available for this symbol.")}</p>`;
+      }
+      const tone = screen.verdict === "breakout" ? "up" : screen.verdict === "watch" ? "range" : "down";
+      return `
+        <h2>Stage 2 screen</h2>
+        <p class="bias ${tone}">${escapeHtml(screen.verdict || "")}</p>
+        <p>${escapeHtml(screen.verdictDetail || "")}</p>
+        <h2>Trend template</h2>
+        <p class="hint">${screen.template?.pass ? "All eight rules pass." : "One failed rule takes the stock out."}</p>
+        ${ruleList(screen.template?.rules)}
+        <h2>Earnings and relative strength</h2>
+        <p class="hint">${screen.fundamentals?.pass ? "Earnings growth and Nifty leadership pass." : "A miss here takes the stock out even when the template passes."}</p>
+        ${ruleList(screen.fundamentals?.rules)}
+        <h2>Entry</h2>
+        <p class="hint">A tight base is not an entry. The entry is a close through the pivot within 5 sessions on at least 1.5 times the prior 50-session volume.</p>
+        ${ruleList(screen.entry?.rules)}
+        <p class="hint">${escapeHtml(screen.note || "")}</p>`;
+    }
+    function paint(market, results, brief, screen) {
       if (!market || market.ok === false) {
         board.innerHTML = `<p class="error">${escapeHtml(market?.error || "No technicals.")}</p>`;
         return;
@@ -395,6 +433,7 @@
           <div class="track">${marks}</div>
           <div class="scale"><span>52-week low ${num(low)}</span><span>20 sessions ${num(market.range20?.low)}–${num(market.range20?.high)}</span><span>52-week high ${num(high)}</span></div>
         </div>
+        ${stageBlock(screen)}
         ${resultsBlock}
         ${briefBlock(brief)}
         <h2>Agent note</h2>

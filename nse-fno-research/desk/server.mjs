@@ -196,6 +196,7 @@ const server = createServer(async (req, res) => {
       }
       const market = await loadModule("bot/lib/market.ts");
       const moneycontrol = await loadModule("bot/lib/moneycontrol.ts");
+      const stage = await loadModule("bot/lib/stage2.ts");
       const resolved = market.resolveSymbol(symbol);
       const briefPromise = "ok" in resolved
         ? Promise.resolve(resolved)
@@ -207,16 +208,21 @@ const server = createServer(async (req, res) => {
               reason: "An index does not have company news, bulk deals, or large deals. Ask for an NSE stock symbol.",
             })
           : moneycontrol.companyBrief(resolved.input);
-      const [technicals, results, brief] = await Promise.all([
+      const screenPromise = "ok" in resolved
+        ? Promise.resolve(resolved)
+        : stage.stageScreenFor(resolved);
+      const [technicals, results, brief, screen] = await Promise.all([
         market.marketTechnicals(symbol),
         market.publishedResults(symbol),
         briefPromise,
+        screenPromise,
       ]);
       sendJson(res, 200, {
         ok: true,
         market: { result: technicals },
         results: { result: results },
         brief,
+        screen,
       });
       return;
     }

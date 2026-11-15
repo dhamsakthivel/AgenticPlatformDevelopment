@@ -17,7 +17,7 @@ Supported index names: `NIFTY`, `BANKNIFTY`, `FINNIFTY`, `MIDCPNIFTY`, `INDIAVIX
 1. Open a terminal in this folder.
 2. Run `npm run desk`.
 3. Open http://127.0.0.1:4173.
-4. Load a symbol. The board shows the quote, results, Moneycontrol headlines, bulk deals, and large deals from the last 5 days.
+4. Load a symbol. The board shows the quote, a Stage 2 screen, results, Moneycontrol headlines, bulk deals, and large deals from the last 5 days.
 5. Choose **Write the note** for the agent's written research. That step needs `npx --yes "@grok/agent-sdk@0.6.0" login`.
 
 Stop an old desk with Ctrl+C before you start it again. `npm run desk` must run inside this folder, not in your home directory.
