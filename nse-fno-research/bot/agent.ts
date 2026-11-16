@@ -16,6 +16,6 @@ export default defineAgent({
     sandbox: true,
   },
   hosting: {
-    egressDomains: ["query1.finance.yahoo.com", "fc.yahoo.com", "api.moneycontrol.com"],
+    egressDomains: ["query1.finance.yahoo.com", "fc.yahoo.com", "api.moneycontrol.com", "www.nseindia.in"],
   },
 });

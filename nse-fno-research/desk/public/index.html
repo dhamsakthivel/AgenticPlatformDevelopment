@@ -137,6 +137,7 @@
     .rules li small { grid-column: 2; color: var(--muted); font-size: 13px; }
     .rules li.pass b { color: var(--up); }
     .rules li.fail b { color: var(--down); }
+    tr.atm { background: var(--range-bg); }
     .news-list { list-style: none; padding: 0; margin: 8px 0 0; }
     .news-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     .news-list a { color: var(--ink); }
@@ -222,9 +223,9 @@
       if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
       return Number(value).toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
     }
-    function signed(value) {
+    function signed(value, digits = 2) {
       if (value === null || value === undefined) return "—";
-      const text = num(value);
+      const text = num(value, digits);
       return value > 0 ? `+${text}` : text;
     }
     function escapeHtml(value) {
@@ -262,8 +263,8 @@
           board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
           return;
         }
-        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, the Stage 2 screen, news, and deals are loaded.";
-        paint(payload.market?.result, payload.results?.result, payload.brief, payload.screen);
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, Stage 2, open interest, news, and deals are loaded.";
+        paint(payload.market?.result, payload.results?.result, payload.brief, payload.screen, payload.optionChain);
       } catch (error) {
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
       }
@@ -368,7 +369,41 @@
         ${ruleList(screen.entry?.rules)}
         <p class="hint">${escapeHtml(screen.note || "")}</p>`;
     }
-    function paint(market, results, brief, screen) {
+    function oiBlock(chain) {
+      if (!chain) return "";
+      if (chain.ok === false) {
+        return `<h2>Open interest</h2><p class="error">${escapeHtml(chain.error || "The option chain did not load.")}</p>`;
+      }
+      if (!chain.applicable) {
+        return `<h2>Open interest</h2><p>${escapeHtml(chain.reason || "No option chain for this symbol.")}</p>`;
+      }
+      const rows = (chain.strikes || []).map((row) => `
+        <tr class="${row.atTheMoney ? "atm" : ""}">
+          <td>${num(row.callOi, 0)}</td>
+          <td class="${changeClass(row.callChange)}">${signed(row.callChange, 0)}</td>
+          <td>${row.callIv ? num(row.callIv, 1) : "—"}</td>
+          <td><b>${num(row.strike, 0)}</b></td>
+          <td>${row.putIv ? num(row.putIv, 1) : "—"}</td>
+          <td class="${changeClass(row.putChange)}">${signed(row.putChange, 0)}</td>
+          <td>${num(row.putOi, 0)}</td>
+        </tr>`).join("");
+      return `
+        <h2>Open interest</h2>
+        <p class="hint">${escapeHtml(chain.nseSymbol || "")} · expiry ${escapeHtml(chain.expiry || "—")} · as of ${escapeHtml(chain.asOf || "time unavailable")} · underlying ${num(chain.underlying)} · <a href="https://www.nseindia.in/option-chain" target="_blank" rel="noopener noreferrer">NSE option chain</a></p>
+        <div class="metrics">
+          <div class="metric"><span>Call OI</span><b>${num(chain.callOi, 0)}</b></div>
+          <div class="metric"><span>Put OI</span><b>${num(chain.putOi, 0)}</b></div>
+          <div class="metric"><span>Put-call ratio</span><b>${num(chain.pcr)}</b></div>
+          <div class="metric"><span>OI change, call / put</span><b class="${changeClass(chain.callChange)}">${signed(chain.callChange, 0)}</b> <b class="${changeClass(chain.putChange)}">${signed(chain.putChange, 0)}</b></div>
+        </div>
+        <p class="hint">Contracts for the nearest expiry. The highlighted strike is nearest the underlying. Heaviest call OI is ${num(chain.maxCallStrike, 0)}. Heaviest put OI is ${num(chain.maxPutStrike, 0)}.</p>
+        <table>
+          <thead><tr><th>Call OI</th><th>Call change</th><th>Call IV</th><th>Strike</th><th>Put IV</th><th>Put change</th><th>Put OI</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p class="hint">${escapeHtml(chain.note || "")}</p>`;
+    }
+    function paint(market, results, brief, screen, optionChain) {
       if (!market || market.ok === false) {
         board.innerHTML = `<p class="error">${escapeHtml(market?.error || "No technicals.")}</p>`;
         return;
@@ -434,6 +469,7 @@
           <div class="scale"><span>52-week low ${num(low)}</span><span>20 sessions ${num(market.range20?.low)}–${num(market.range20?.high)}</span><span>52-week high ${num(high)}</span></div>
         </div>
         ${stageBlock(screen)}
+        ${oiBlock(optionChain)}
         ${resultsBlock}
         ${briefBlock(brief)}
         <h2>Agent note</h2>

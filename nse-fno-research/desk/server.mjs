@@ -197,6 +197,7 @@ const server = createServer(async (req, res) => {
       const market = await loadModule("bot/lib/market.ts");
       const moneycontrol = await loadModule("bot/lib/moneycontrol.ts");
       const stage = await loadModule("bot/lib/stage2.ts");
+      const chain = await loadModule("bot/lib/optionchain.ts");
       const resolved = market.resolveSymbol(symbol);
       const briefPromise = "ok" in resolved
         ? Promise.resolve(resolved)
@@ -211,11 +212,15 @@ const server = createServer(async (req, res) => {
       const screenPromise = "ok" in resolved
         ? Promise.resolve(resolved)
         : stage.stageScreenFor(resolved);
-      const [technicals, results, brief, screen] = await Promise.all([
+      const chainPromise = "ok" in resolved
+        ? Promise.resolve(resolved)
+        : chain.optionChainFor(resolved);
+      const [technicals, results, brief, screen, optionChain] = await Promise.all([
         market.marketTechnicals(symbol),
         market.publishedResults(symbol),
         briefPromise,
         screenPromise,
+        chainPromise,
       ]);
       sendJson(res, 200, {
         ok: true,
@@ -223,6 +228,7 @@ const server = createServer(async (req, res) => {
         results: { result: results },
         brief,
         screen,
+        optionChain,
       });
       return;
     }

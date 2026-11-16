@@ -18,9 +18,6 @@ const coverage: Coverage = {
   source: "Yahoo Finance",
   priceDelay: "Quotes can be delayed. They are not the NSE live feed.",
   notIncluded: [
-    "option chain",
-    "open interest",
-    "put-call ratio",
     "futures basis",
     "lot size",
     "F&O ban list",
