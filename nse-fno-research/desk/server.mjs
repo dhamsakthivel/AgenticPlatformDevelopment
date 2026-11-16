@@ -187,6 +187,12 @@ const server = createServer(async (req, res) => {
       sendJson(res, 200, { ok: true });
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/scan") {
+      const chain = await loadModule("bot/lib/optionchain.ts");
+      const scan = await chain.oiPatternScan(url.searchParams.get("fresh") === "1");
+      sendJson(res, scan.ok === false ? 502 : 200, scan);
+      return;
+    }
     if (req.method === "POST" && url.pathname === "/api/research") {
       const body = await readBody(req);
       const symbol = typeof body.symbol === "string" ? body.symbol.trim() : "";

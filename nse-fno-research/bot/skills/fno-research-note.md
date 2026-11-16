@@ -9,7 +9,7 @@ description: Use when the user wants an NSE F&O research note, a trend view, or 
 3. Call `published_results` when the symbol is a stock, or when the user asks about results or earnings. Do not call it for an index.
 4. Call `company_brief` for a stock. Do not call it for an index.
 5. Call `stage_screen` for a stock. Do not call it for an index.
-6. Call `option_chain` for a stock and for NIFTY, BANKNIFTY, FINNIFTY, and MIDCPNIFTY. Skip it for INDIAVIX.
+6. Call `option_chain` for a stock and for NIFTY, BANKNIFTY, FINNIFTY, and MIDCPNIFTY. Skip it for INDIAVIX. When the user wants the F&O scan, call `oi_scan` instead of one chain, and list only the symbols it returns.
 7. Write the note in this shape. Use only tool figures.
 
 ## <name> (<symbol>)

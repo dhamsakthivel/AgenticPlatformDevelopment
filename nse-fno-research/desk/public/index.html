@@ -71,6 +71,8 @@
       cursor: pointer;
     }
     button.secondary { background: transparent; color: var(--ink); }
+    button.link { background: transparent; color: var(--ink); border: 0; padding: 0; font-weight: 600; }
+    button.link:hover { text-decoration: underline; }
     button:disabled { opacity: 0.55; cursor: wait; }
     button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 22px; }
@@ -176,10 +178,13 @@
       <form id="symbol-form">
         <label for="symbol">Underlying</label>
         <div class="row">
-          <input id="symbol" name="symbol" type="text" value="NIFTY" autocomplete="off" maxlength="32" />
+          <input id="symbol" name="symbol" type="text" value="" placeholder="RELIANCE" autocomplete="off" maxlength="32" />
           <button type="submit">Load</button>
         </div>
       </form>
+      <div class="row" style="margin-top: 10px;">
+        <button type="button" class="secondary" id="home">F&amp;O scan</button>
+      </div>
       <div class="chips" id="chips"></div>
       <form id="ask-form" class="ask">
         <label for="question">Ask the agent</label>
@@ -192,7 +197,7 @@
       </form>
     </aside>
     <section class="board" id="board" aria-live="polite">
-      <p class="hint">Loading NIFTY…</p>
+      <p class="hint">Scanning F&amp;O open interest…</p>
     </section>
   </main>
   <script>
@@ -257,6 +262,65 @@
       return "";
     }
 
+    let scanPayload = null;
+    function scanRows(title, rows) {
+      const body = (rows || []).map((row) => `
+        <tr>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button></td>
+          <td class="${row.callChange > 0 ? "up-text" : "down-text"}">${signed(row.callChange, 0)}</td>
+          <td class="${row.putChange > 0 ? "up-text" : "down-text"}">${signed(row.putChange, 0)}</td>
+          <td>${num(row.underlying)}</td>
+        </tr>`).join("");
+      return `
+        <h2>${escapeHtml(title)} <span class="hint">${(rows || []).length}</span></h2>
+        <table>
+          <thead><tr><th>Symbol</th><th>Call change</th><th>Put change</th><th>Underlying</th></tr></thead>
+          <tbody>${body || "<tr><td colspan='4'>None on this scan.</td></tr>"}</tbody>
+        </table>`;
+    }
+    function paintScan(scan) {
+      scanPayload = scan;
+      const matched = (scan.callLoaded?.length || 0) + (scan.putLoaded?.length || 0);
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">F&amp;O scan</h2>
+            <p class="sub">Nearest expiry ${escapeHtml(scan.expiry || "—")} · ${escapeHtml(scan.asOf || "time unavailable")} · ${matched} of ${num(scan.scanned, 0)} names</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-scan">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(scan.note || "")}</p>
+        ${scanRows("Call loaded, put unwound", scan.callLoaded)}
+        ${scanRows("Put loaded, call unwound", scan.putLoaded)}
+        ${scan.missed ? `<p class="hint">${num(scan.missed, 0)} names did not return a chain.</p>` : ""}`;
+      board.querySelector("#refresh-scan")?.addEventListener("click", () => loadScan(true));
+      board.querySelectorAll("[data-symbol]").forEach((button) => {
+        button.addEventListener("click", () => {
+          symbolInput.value = button.dataset.symbol;
+          loadSymbol(button.dataset.symbol);
+        });
+      });
+    }
+    async function loadScan(fresh) {
+      if (!fresh && scanPayload) {
+        paintScan(scanPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Scanning every equity F&amp;O name. This takes a few seconds.</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Scanning open interest…";
+      try {
+        const response = await fetch(fresh ? "/api/scan?fresh=1" : "/api/scan", { signal: AbortSignal.timeout(90000) });
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The scan did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />F&amp;O scan is loaded. Open a name for the full board.";
+        paintScan(payload);
+      } catch (error) {
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The scan did not answer in time." : (error.message || "The scan did not answer."))}</p>`;
+      }
+    }
     async function loadSymbol(raw) {
       const symbol = raw.trim();
       if (!symbol) return;
@@ -630,7 +694,8 @@
     }).catch(() => {
       statusEl.textContent = "Desk status unavailable. Stop the window with Ctrl+C and run npm run desk again.";
     });
-    loadSymbol("NIFTY");
+    document.querySelector("#home").addEventListener("click", () => loadScan(false));
+    loadScan(false);
   </script>
 </body>
 </html>

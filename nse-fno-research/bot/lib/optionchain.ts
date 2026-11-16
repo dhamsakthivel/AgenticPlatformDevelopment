@@ -322,3 +322,146 @@ export async function optionChainFor(target: ChainTarget): Promise<OptionChain |
     return { ok: false, symbol, error: message };
   }
 }
+
+const SCAN_INDEXES = new Set(["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50"]);
+
+export type OiPattern = "call-loaded" | "put-loaded";
+
+export type ScanRow = {
+  symbol: string;
+  pattern: OiPattern;
+  patternLabel: string;
+  callChange: number;
+  putChange: number;
+  underlying: number | null;
+};
+
+export type OiScan = {
+  ok: true;
+  asOf: string | null;
+  expiry: string;
+  scanned: number;
+  missed: number;
+  callLoaded: ScanRow[];
+  putLoaded: ScanRow[];
+  note: string;
+};
+
+let scanCache: { exp: number; value: OiScan } | undefined;
+let scanFlight: Promise<OiScan | ChainFailure> | undefined;
+
+function patternOf(callChange: number, putChange: number): { pattern: OiPattern; patternLabel: string } | null {
+  if (callChange > 0 && putChange < 0) {
+    return { pattern: "call-loaded", patternLabel: "Call loaded, put unwound" };
+  }
+  if (putChange > 0 && callChange < 0) {
+    return { pattern: "put-loaded", patternLabel: "Put loaded, call unwound" };
+  }
+  return null;
+}
+
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      out[index] = await fn(items[index]);
+    }
+  }
+  const workers = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return out;
+}
+
+async function equityTotals(symbol: string, expiry: string): Promise<{ callChange: number; putChange: number; underlying: number | null } | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const cookie = await nseSession(attempt > 0);
+      const chain = await nseGet(
+        `/option-chain-v3?type=Equity&symbol=${encodeURIComponent(symbol)}&expiry=${encodeURIComponent(expiry)}`,
+        cookie,
+      );
+      const records = record(record(chain)?.records);
+      const rows = Array.isArray(records?.data) ? records.data : [];
+      if (rows.length === 0) return null;
+      let callChange = 0;
+      let putChange = 0;
+      for (const row of rows) {
+        const item = record(row);
+        callChange += side(item?.CE).change ?? 0;
+        putChange += side(item?.PE).change ?? 0;
+      }
+      return { callChange, putChange, underlying: num(records?.underlyingValue) };
+    } catch {
+      session = undefined;
+    }
+  }
+  return null;
+}
+
+async function loadOiScan(): Promise<OiScan | ChainFailure> {
+  let cookie = await nseSession();
+  let underlyings: unknown;
+  try {
+    underlyings = await nseGet("/live-analysis-oi-spurts-underlyings", cookie);
+  } catch {
+    session = undefined;
+    cookie = await nseSession(true);
+    underlyings = await nseGet("/live-analysis-oi-spurts-underlyings", cookie);
+  }
+  const listed = Array.isArray(record(underlyings)?.data) ? (record(underlyings)?.data as unknown[]) : [];
+  const symbols = listed
+    .map((row) => str(record(row)?.symbol))
+    .filter((symbol): symbol is string => symbol !== null && !SCAN_INDEXES.has(symbol));
+  if (symbols.length === 0) {
+    return { ok: false, error: "NSE returned no F&O underlyings." };
+  }
+  const info = await nseGet("/option-chain-contract-info?symbol=RELIANCE", cookie);
+  const expiry = strings(record(info)?.expiryDates)[0];
+  if (!expiry) return { ok: false, error: "NSE returned no equity option expiry." };
+  const totals = await mapPool(symbols, 8, async (symbol) => ({ symbol, book: await equityTotals(symbol, expiry) }));
+  const rows: ScanRow[] = [];
+  let missed = 0;
+  for (const item of totals) {
+    if (!item.book) {
+      missed += 1;
+      continue;
+    }
+    const pattern = patternOf(item.book.callChange, item.book.putChange);
+    if (!pattern) continue;
+    rows.push({
+      symbol: item.symbol,
+      pattern: pattern.pattern,
+      patternLabel: pattern.patternLabel,
+      callChange: item.book.callChange,
+      putChange: item.book.putChange,
+      underlying: item.book.underlying === null ? null : round(item.book.underlying, 2),
+    });
+  }
+  const bySize = (a: ScanRow, b: ScanRow) =>
+    Math.abs(b.callChange) + Math.abs(b.putChange) - (Math.abs(a.callChange) + Math.abs(a.putChange));
+  const scan: OiScan = {
+    ok: true,
+    asOf: str(record(underlyings)?.timestamp),
+    expiry,
+    scanned: symbols.length,
+    missed,
+    callLoaded: rows.filter((row) => row.pattern === "call-loaded").sort(bySize),
+    putLoaded: rows.filter((row) => row.pattern === "put-loaded").sort(bySize),
+    note: "Equity F&O only, nearest shared expiry, summed across strikes. A name is listed when call open interest rose and put open interest fell, or the reverse. Names where both sides rose or both fell are left off. This is an open-interest scan, not a trade recommendation.",
+  };
+  scanCache = { exp: Date.now() + 3 * 60 * 1000, value: scan };
+  return scan;
+}
+
+export function oiPatternScan(fresh = false): Promise<OiScan | ChainFailure> {
+  if (!fresh && scanCache && scanCache.exp > Date.now()) return Promise.resolve(scanCache.value);
+  if (!fresh && scanFlight) return scanFlight;
+  const flight = loadOiScan().finally(() => {
+    if (scanFlight === flight) scanFlight = undefined;
+  });
+  if (!fresh) scanFlight = flight;
+  return flight;
+}
