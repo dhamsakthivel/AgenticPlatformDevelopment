@@ -19,6 +19,7 @@ As of: <asOf>. <priceDelay>
 
 Last: <price> <currency> (<dayChangePercent>% on the day)
 Range: day <dayLow>–<dayHigh>, 20 sessions <range20.low>–<range20.high>, 52-week <fiftyTwoWeekLow>–<fiftyTwoWeekHigh>
+Day levels: from `dayLevels`, name the session date, nearest support, nearest resistance, pivot, Support 1, and Resistance 1. If `dayLevels` is null, say the prior session is missing.
 Technicals: SMA20 <sma20>, SMA50 <sma50>, RSI14 <rsi14>, 5-session return <return5d>%, 21-session return <return21d>%, 63-session return <return63d>%, 20-session realized vol <realizedVol20d>%
 Results: for a stock, list each quarter with EPS actual, EPS estimate, and surprisePercent, then the next earnings date and whether that date is an estimate. For an index, say company results do not apply.
 News: list each Moneycontrol headline with its date. Do not add headlines the tool did not return.

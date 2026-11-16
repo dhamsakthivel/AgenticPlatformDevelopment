@@ -283,13 +283,36 @@ export type MarketTechnicals = {
   range20: { high: number | null; low: number | null };
   trend: Trend;
   trendDetail: string;
+  dayLevels: DayLevels | null;
   corporateAction: string | null;
   coverage: Coverage;
 };
 
+export type DayLevel = {
+  name: string;
+  price: number;
+  side: "support" | "resistance" | "at";
+};
+
+export type DayLevels = {
+  sessionDate: string | null;
+  previousHigh: number;
+  previousLow: number;
+  previousClose: number;
+  pivot: number;
+  resistance1: number;
+  resistance2: number;
+  support1: number;
+  support2: number;
+  nearestSupport: { name: string; price: number } | null;
+  nearestResistance: { name: string; price: number } | null;
+  levels: DayLevel[];
+  note: string;
+};
+
 export type ToolFailure = { ok: false; symbol?: string; error: string };
 
-type Bar = { close: number; high: number | null; low: number | null; adj: number | null };
+type Bar = { close: number; high: number | null; low: number | null; adj: number | null; time: number | null };
 
 function parseBars(result: Record<string, unknown>): Bar[] {
   const indicators = record(result.indicators);
@@ -298,6 +321,7 @@ function parseBars(result: Record<string, unknown>): Bar[] {
   const closes = Array.isArray(quote?.close) ? quote.close : [];
   const highs = Array.isArray(quote?.high) ? quote.high : [];
   const lows = Array.isArray(quote?.low) ? quote.low : [];
+  const times = Array.isArray(result.timestamp) ? result.timestamp : [];
   const adjList = indicators?.adjclose;
   const adjNode = Array.isArray(adjList) ? record(adjList[0]) : null;
   const adj = Array.isArray(adjNode?.adjclose) ? adjNode.adjclose : [];
@@ -305,9 +329,79 @@ function parseBars(result: Record<string, unknown>): Bar[] {
   for (let i = 0; i < closes.length; i++) {
     const close = num(closes[i]);
     if (close === null) continue;
-    bars.push({ close, high: num(highs[i]), low: num(lows[i]), adj: num(adj[i]) });
+    bars.push({ close, high: num(highs[i]), low: num(lows[i]), adj: num(adj[i]), time: num(times[i]) });
   }
   return bars;
+}
+
+function istDate(unixSeconds: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(unixSeconds * 1000));
+}
+
+function istDayLabel(unixSeconds: number): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(unixSeconds * 1000));
+}
+
+function dayLevels(bars: Bar[], price: number | null): DayLevels | null {
+  if (bars.length < 2) return null;
+  const today = istDate(Date.now() / 1000);
+  const last = bars[bars.length - 1];
+  const session = last.time !== null && istDate(last.time) === today ? bars[bars.length - 2] : last;
+  if (!session || session.high === null || session.low === null) return null;
+  const high = session.high;
+  const low = session.low;
+  const close = session.close;
+  const pivot = (high + low + close) / 3;
+  const resistance1 = 2 * pivot - low;
+  const support1 = 2 * pivot - high;
+  const span = high - low;
+  const resistance2 = pivot + span;
+  const support2 = pivot - span;
+  const named = [
+    { name: "Resistance 2", price: round(resistance2, 2) },
+    { name: "Resistance 1", price: round(resistance1, 2) },
+    { name: "Previous high", price: round(high, 2) },
+    { name: "Pivot", price: round(pivot, 2) },
+    { name: "Previous close", price: round(close, 2) },
+    { name: "Previous low", price: round(low, 2) },
+    { name: "Support 1", price: round(support1, 2) },
+    { name: "Support 2", price: round(support2, 2) },
+  ];
+  const spot = price === null ? null : round(price, 2);
+  const levels: DayLevel[] = named.map((level) => ({
+    name: level.name,
+    price: level.price,
+    side: spot === null ? "at" : spot > level.price ? "support" : spot < level.price ? "resistance" : "at",
+  }));
+  const below = spot === null ? [] : levels.filter((level) => level.price < spot);
+  const above = spot === null ? [] : levels.filter((level) => level.price > spot);
+  const nearestSupport = below.length === 0 ? null : below.reduce((best, level) => (level.price > best.price ? level : best));
+  const nearestResistance = above.length === 0 ? null : above.reduce((best, level) => (level.price < best.price ? level : best));
+  return {
+    sessionDate: session.time === null ? null : istDayLabel(session.time),
+    previousHigh: round(high, 2),
+    previousLow: round(low, 2),
+    previousClose: round(close, 2),
+    pivot: round(pivot, 2),
+    resistance1: round(resistance1, 2),
+    resistance2: round(resistance2, 2),
+    support1: round(support1, 2),
+    support2: round(support2, 2),
+    nearestSupport: nearestSupport ? { name: nearestSupport.name, price: nearestSupport.price } : null,
+    nearestResistance: nearestResistance ? { name: nearestResistance.name, price: nearestResistance.price } : null,
+    levels,
+    note: "Day levels use the previous completed session. Pivot is (high + low + close) / 3. Resistance 1 is 2 × pivot − low. Support 1 is 2 × pivot − high. Resistance 2 and Support 2 add and subtract that session's high-low range. Nearest support is the closest level below the price. Nearest resistance is the closest level above it.",
+  };
 }
 
 export async function marketTechnicals(input: string): Promise<MarketTechnicals | ToolFailure> {
@@ -382,6 +476,7 @@ export async function marketTechnicals(input: string): Promise<MarketTechnicals 
     },
     trend: trend.trend,
     trendDetail: trend.trendDetail,
+    dayLevels: dayLevels(bars, num(meta.regularMarketPrice) ?? last),
     corporateAction,
     coverage,
   };

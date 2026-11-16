@@ -7,7 +7,7 @@ export default defineTool({
   description: prompt`
     Load delayed price, technicals, and a trend label for one NSE underlying.
     Use for NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, INDIAVIX, or a stock ticker such as RELIANCE.
-    The trend field is the bias. Quote its numbers. Do not invent option-chain data.
+    The trend field is the bias. dayLevels holds the previous session's high, low, close, pivot, and the nearest support and resistance. Quote those numbers. Do not invent levels.
   `,
   inputSchema: z.object({
     symbol: z

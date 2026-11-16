@@ -146,6 +146,8 @@
     .rules li small { grid-column: 2; color: var(--muted); font-size: 13px; }
     .rules li.pass b { color: var(--up); }
     .rules li.fail b { color: var(--down); }
+    tr.support { background: var(--up-bg); }
+    tr.resistance { background: var(--down-bg); }
     tr.atm { background: var(--range-bg); }
     .news-list { list-style: none; padding: 0; margin: 8px 0 0; }
     .news-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -426,6 +428,36 @@
       if (chain.bias === "sell") return { tone: "down", word: "Sell" };
       return { tone: "range", word: "Neutral" };
     }
+    function dayLevelsBlock(levels) {
+      if (!levels) {
+        return `<h2>Day levels</h2><p>A prior completed session is required for the day pivot.</p>`;
+      }
+      const near = (level) => {
+        if (levels.nearestSupport && level.name === levels.nearestSupport.name && level.price === levels.nearestSupport.price) return "support";
+        if (levels.nearestResistance && level.name === levels.nearestResistance.name && level.price === levels.nearestResistance.price) return "resistance";
+        return "";
+      };
+      const rows = (levels.levels || []).map((level) => `
+        <tr class="${near(level)}">
+          <td>${escapeHtml(level.name)}</td>
+          <td>${num(level.price)}</td>
+          <td>${level.side === "support" ? "Below price" : level.side === "resistance" ? "Above price" : "At price"}</td>
+        </tr>`).join("");
+      return `
+        <h2>Day levels</h2>
+        <p class="hint">Previous session ${escapeHtml(levels.sessionDate || "date unavailable")}. Pivot is (high + low + close) / 3. Resistance 1 is 2 × pivot − low. Support 1 is 2 × pivot − high.</p>
+        <div class="metrics">
+          <div class="metric"><span>Nearest support</span><b>${levels.nearestSupport ? num(levels.nearestSupport.price) : "—"}</b><span>${escapeHtml(levels.nearestSupport?.name || "None below the price")}</span></div>
+          <div class="metric"><span>Nearest resistance</span><b>${levels.nearestResistance ? num(levels.nearestResistance.price) : "—"}</b><span>${escapeHtml(levels.nearestResistance?.name || "None above the price")}</span></div>
+          <div class="metric"><span>Pivot</span><b>${num(levels.pivot)}</b></div>
+          <div class="metric"><span>Prior high / low</span><b>${num(levels.previousLow)}–${num(levels.previousHigh)}</b></div>
+        </div>
+        <table>
+          <thead><tr><th>Level</th><th>Price</th><th>Versus price</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p class="hint">${escapeHtml(levels.note || "")}</p>`;
+    }
     function paint(market, results, brief, screen, optionChain) {
       if (!market || market.ok === false) {
         board.innerHTML = `<p class="error">${escapeHtml(market?.error || "No technicals.")}</p>`;
@@ -492,6 +524,7 @@
         <p class="price">${num(market.price)} <span class="${changeClass(change)}">${signed(change)}% today</span></p>
         <p class="sub">${escapeHtml(market.trendDetail || "")}</p>
         ${market.corporateAction ? `<p class="banner">${escapeHtml(market.corporateAction)}</p>` : ""}
+        ${dayLevelsBlock(market.dayLevels)}
         <div class="metrics">
           <div class="metric"><span>SMA 20</span><b>${num(market.sma20)}</b></div>
           <div class="metric"><span>SMA 50</span><b>${num(market.sma50)}</b></div>
