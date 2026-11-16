@@ -267,15 +267,16 @@
       const body = (rows || []).map((row) => `
         <tr>
           <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button></td>
+          <td>${num(row.underlying)}</td>
+          <td class="${changeClass(row.changePercent)}">${signed(row.changePercent)}%</td>
           <td class="${row.callChange > 0 ? "up-text" : "down-text"}">${signed(row.callChange, 0)}</td>
           <td class="${row.putChange > 0 ? "up-text" : "down-text"}">${signed(row.putChange, 0)}</td>
-          <td>${num(row.underlying)}</td>
         </tr>`).join("");
       return `
         <h2>${escapeHtml(title)} <span class="hint">${(rows || []).length}</span></h2>
         <table>
-          <thead><tr><th>Symbol</th><th>Call change</th><th>Put change</th><th>Underlying</th></tr></thead>
-          <tbody>${body || "<tr><td colspan='4'>None on this scan.</td></tr>"}</tbody>
+          <thead><tr><th>Symbol</th><th>Underlying</th><th>Change</th><th>Call change</th><th>Put change</th></tr></thead>
+          <tbody>${body || "<tr><td colspan='5'>None on this scan.</td></tr>"}</tbody>
         </table>`;
     }
     function paintScan(scan) {

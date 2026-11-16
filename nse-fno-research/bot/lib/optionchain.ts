@@ -334,6 +334,7 @@ export type ScanRow = {
   callChange: number;
   putChange: number;
   underlying: number | null;
+  changePercent: number | null;
 };
 
 export type OiScan = {
@@ -372,6 +373,40 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
   }
   const workers = Math.min(limit, items.length);
   await Promise.all(Array.from({ length: workers }, () => worker()));
+  return out;
+}
+
+async function priceChanges(symbols: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  for (let start = 0; start < symbols.length; start += 20) {
+    const query = symbols
+      .slice(start, start + 20)
+      .map((symbol) => encodeURIComponent(`${symbol}.NS`))
+      .join(",");
+    try {
+      const response = await fetch(
+        `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${query}&range=1d&interval=1d`,
+        {
+          headers: { "user-agent": USER_AGENT, accept: "application/json" },
+          signal: AbortSignal.timeout(20_000),
+        },
+      );
+      if (!response.ok) continue;
+      const body: unknown = await response.json();
+      const list = record(record(body)?.spark)?.result;
+      if (!Array.isArray(list)) continue;
+      for (const item of list) {
+        const node = record(item);
+        const yahoo = str(node?.symbol);
+        const first = Array.isArray(node?.response) ? record(node.response[0]) : null;
+        const change = num(record(first?.meta)?.regularMarketChangePercent);
+        if (!yahoo || change === null) continue;
+        out.set(yahoo.replace(/\.NS$/i, ""), round(change, 2));
+      }
+    } catch {
+      continue;
+    }
+  }
   return out;
 }
 
@@ -438,8 +473,11 @@ async function loadOiScan(): Promise<OiScan | ChainFailure> {
       callChange: item.book.callChange,
       putChange: item.book.putChange,
       underlying: item.book.underlying === null ? null : round(item.book.underlying, 2),
+      changePercent: null,
     });
   }
+  const changes = await priceChanges(rows.map((row) => row.symbol));
+  for (const row of rows) row.changePercent = changes.get(row.symbol) ?? null;
   const bySize = (a: ScanRow, b: ScanRow) =>
     Math.abs(b.callChange) + Math.abs(b.putChange) - (Math.abs(a.callChange) + Math.abs(a.putChange));
   const scan: OiScan = {
@@ -450,7 +488,7 @@ async function loadOiScan(): Promise<OiScan | ChainFailure> {
     missed,
     callLoaded: rows.filter((row) => row.pattern === "call-loaded").sort(bySize),
     putLoaded: rows.filter((row) => row.pattern === "put-loaded").sort(bySize),
-    note: "Equity F&O only, nearest shared expiry, summed across strikes. A name is listed when call open interest rose and put open interest fell, or the reverse. Names where both sides rose or both fell are left off. This is an open-interest scan, not a trade recommendation.",
+    note: "Equity F&O only, nearest shared expiry, summed across strikes. A name is listed when call open interest rose and put open interest fell, or the reverse. Names where both sides rose or both fell are left off. Change is the cash session move in percent. This is an open-interest scan, not a trade recommendation.",
   };
   scanCache = { exp: Date.now() + 3 * 60 * 1000, value: scan };
   return scan;
