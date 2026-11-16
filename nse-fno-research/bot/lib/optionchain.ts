@@ -79,6 +79,17 @@ function strings(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
+const PAGE_HEADERS = {
+  "user-agent": USER_AGENT,
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "accept-language": "en-IN,en;q=0.9",
+  "upgrade-insecure-requests": "1",
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "sec-fetch-user": "?1",
+};
+
 function cookieHeader(response: Response): string {
   const headers = response.headers as Headers & { getSetCookie?: () => string[] };
   const lines = typeof headers.getSetCookie === "function" ? headers.getSetCookie() : [];
@@ -90,33 +101,82 @@ function cookieHeader(response: Response): string {
     .join("; ");
 }
 
-async function nseSession(force = false): Promise<string> {
-  if (!force && session && session.exp > Date.now()) return session.cookie;
-  const response = await fetch(PAGE, {
-    headers: { "user-agent": USER_AGENT, accept: "text/html" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  const cookie = cookieHeader(response);
-  if (!response.ok || !cookie) {
-    throw new Error(`NSE option-chain page returned HTTP ${response.status}.`);
+function rememberCookies(jar: Map<string, string>, response: Response): void {
+  for (const part of cookieHeader(response).split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq > 0) jar.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
   }
-  session = { cookie, exp: Date.now() + 5 * 60 * 1000 };
-  return cookie;
 }
 
-async function nseGet(path: string, cookie: string): Promise<unknown> {
-  const response = await fetch(`${API}${path}`, {
-    headers: {
-      "user-agent": USER_AGENT,
-      accept: "application/json, text/plain, */*",
-      referer: PAGE,
-      "x-requested-with": "XMLHttpRequest",
-      cookie,
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(`NSE option chain returned HTTP ${response.status}.`);
+function cookieValue(jar: Map<string, string>): string {
+  return [...jar.entries()].map(([key, value]) => `${key}=${value}`).join("; ");
+}
+
+async function readPage(jar: Map<string, string>, url: string): Promise<number> {
+  let current = url;
+  let status = 0;
+  for (let hop = 0; hop < 4; hop += 1) {
+    const response = await fetch(current, {
+      headers: {
+        ...PAGE_HEADERS,
+        ...(jar.size > 0 ? { cookie: cookieValue(jar) } : {}),
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(12_000),
+    });
+    status = response.status;
+    rememberCookies(jar, response);
+    const location = response.headers.get("location");
+    if (!location || status < 300 || status >= 400) return status;
+    current = new URL(location, current).href;
+  }
+  return status;
+}
+
+function usable(jar: Map<string, string>): boolean {
+  return jar.has("nsit") || jar.has("AKA_A2");
+}
+
+async function nseSession(force = false): Promise<string> {
+  if (!force && session && session.exp > Date.now()) return session.cookie;
+  const jar = new Map<string, string>();
+  let status = await readPage(jar, PAGE);
+  if (!usable(jar)) status = await readPage(jar, "https://www.nseindia.in/");
+  if (!usable(jar)) status = await readPage(jar, "https://www.nseindia.com/option-chain");
+  if (usable(jar)) {
+    const cookie = cookieValue(jar);
+    session = { cookie, exp: Date.now() + 5 * 60 * 1000 };
+    return cookie;
+  }
+  throw new Error(`NSE option-chain page returned HTTP ${status || 403}.`);
+}
+
+async function nseGet(path: string, cookie?: string, attempt = 0): Promise<unknown> {
+  const jar = cookie ?? (await nseSession());
+  let response: Response;
+  try {
+    response = await fetch(`${API}${path}`, {
+      headers: {
+        "user-agent": USER_AGENT,
+        accept: "application/json, text/plain, */*",
+        "accept-language": "en-IN,en;q=0.9",
+        referer: PAGE,
+        "x-requested-with": "XMLHttpRequest",
+        cookie: jar,
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch (error) {
+    if (attempt < 1) {
+      session = undefined;
+      return nseGet(path, await nseSession(true), attempt + 1);
+    }
+    throw error;
+  }
+  if ((response.status === 401 || response.status === 403) && attempt < 1) {
+    session = undefined;
+    return nseGet(path, await nseSession(true), attempt + 1);
   }
   if (!response.ok) {
     throw new Error(`NSE option chain returned HTTP ${response.status}.`);
