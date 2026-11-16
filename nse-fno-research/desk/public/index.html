@@ -82,8 +82,17 @@
       justify-content: space-between;
       gap: 16px;
       align-items: start;
+      flex-wrap: wrap;
       border-bottom: 1px solid var(--line);
       padding-bottom: 14px;
+    }
+    .statuses { display: flex; flex-wrap: wrap; gap: 18px; justify-content: flex-end; }
+    .status-card { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .status-label {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
     .name { font-family: Palatino, Georgia, serif; font-size: 28px; margin: 0; }
     .sub { color: var(--muted); margin: 4px 0 0; }
@@ -138,8 +147,6 @@
     .rules li.pass b { color: var(--up); }
     .rules li.fail b { color: var(--down); }
     tr.atm { background: var(--range-bg); }
-    .oi-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 28px; }
-    .oi-head h2 { margin: 0; }
     .news-list { list-style: none; padding: 0; margin: 8px 0 0; }
     .news-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     .news-list a { color: var(--ink); }
@@ -389,13 +396,8 @@
           <td class="${changeClass(row.putChange)}">${signed(row.putChange, 0)}</td>
           <td>${num(row.putOi, 0)}</td>
         </tr>`).join("");
-      const tone = chain.bias === "buy" ? "up" : chain.bias === "sell" ? "down" : "range";
-      const label = chain.bias === "buy" ? "Buy" : chain.bias === "sell" ? "Sell" : "Neutral";
       return `
-        <div class="oi-head">
-          <h2>Open interest</h2>
-          <div class="bias ${tone}">${label}</div>
-        </div>
+        <h2>Open interest</h2>
         <p>${escapeHtml(chain.biasDetail || "")}</p>
         <p class="hint">${escapeHtml(chain.nseSymbol || "")} · expiry ${escapeHtml(chain.expiry || "—")} · as of ${escapeHtml(chain.asOf || "time unavailable")} · underlying ${num(chain.underlying)} · <a href="https://www.nseindia.in/option-chain" target="_blank" rel="noopener noreferrer">NSE option chain</a></p>
         <div class="metrics">
@@ -410,6 +412,19 @@
           <tbody>${rows}</tbody>
         </table>
         <p class="hint">${escapeHtml(chain.note || "")}</p>`;
+    }
+    function todayPriceStatus(change) {
+      if (typeof change !== "number" || !Number.isFinite(change) || change === 0) {
+        return { tone: "range", word: "Flat" };
+      }
+      return change > 0 ? { tone: "up", word: "Up" } : { tone: "down", word: "Down" };
+    }
+    function oiStatus(chain) {
+      if (!chain || chain.ok === false) return { tone: "range", word: "Unavailable" };
+      if (!chain.applicable) return { tone: "range", word: "None" };
+      if (chain.bias === "buy") return { tone: "up", word: "Buy" };
+      if (chain.bias === "sell") return { tone: "down", word: "Sell" };
+      return { tone: "range", word: "Neutral" };
     }
     function paint(market, results, brief, screen, optionChain) {
       if (!market || market.ok === false) {
@@ -451,13 +466,28 @@
         sma50Pos === null ? "" : `<span class="mark sma" style="left:${sma50Pos}%" title="SMA50"></span>`,
         pricePos === null ? "" : `<span class="dot" style="left:${pricePos}%" title="Last price"></span>`,
       ].join("");
+      const today = todayPriceStatus(change);
+      const oi = oiStatus(optionChain);
       board.innerHTML = `
         <div class="head">
           <div>
             <h2 class="name">${escapeHtml(market.name || market.symbol)}</h2>
             <p class="sub">${escapeHtml(market.yahooSymbol)} · ${escapeHtml(market.asOf || "time unavailable")} · ${escapeHtml(market.currency || "")}</p>
           </div>
-          <div class="bias ${escapeHtml(market.trend)}">${escapeHtml(market.trend)}</div>
+          <div class="statuses">
+            <div class="status-card">
+              <span class="status-label">Trend Status</span>
+              <div class="bias ${escapeHtml(market.trend)}">${escapeHtml(market.trend)}</div>
+            </div>
+            <div class="status-card">
+              <span class="status-label">Today Price Status</span>
+              <div class="bias ${today.tone}">${today.word}</div>
+            </div>
+            <div class="status-card">
+              <span class="status-label">OI Status</span>
+              <div class="bias ${oi.tone}">${oi.word}</div>
+            </div>
+          </div>
         </div>
         <p class="price">${num(market.price)} <span class="${changeClass(change)}">${signed(change)}% today</span></p>
         <p class="sub">${escapeHtml(market.trendDetail || "")}</p>
