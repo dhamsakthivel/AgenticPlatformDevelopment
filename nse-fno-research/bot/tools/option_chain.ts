@@ -8,7 +8,7 @@ export default defineTool({
   description: prompt`
     Load the latest NSE option-chain open interest for one underlying.
     Use for NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, or a stock ticker such as RELIANCE.
-    Quote only the totals, PCR, and strikes this tool returns. Do not invent a chain.
+    Quote the bias, the totals, the PCR, and the strikes this tool returns. Do not invent a chain.
   `,
   inputSchema: z.object({
     symbol: z.string().min(1).max(32).describe("NSE ticker or index. Examples: RELIANCE, NIFTY, BANKNIFTY."),

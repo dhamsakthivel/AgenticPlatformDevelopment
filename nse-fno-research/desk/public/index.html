@@ -138,6 +138,8 @@
     .rules li.pass b { color: var(--up); }
     .rules li.fail b { color: var(--down); }
     tr.atm { background: var(--range-bg); }
+    .oi-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 28px; }
+    .oi-head h2 { margin: 0; }
     .news-list { list-style: none; padding: 0; margin: 8px 0 0; }
     .news-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     .news-list a { color: var(--ink); }
@@ -387,8 +389,14 @@
           <td class="${changeClass(row.putChange)}">${signed(row.putChange, 0)}</td>
           <td>${num(row.putOi, 0)}</td>
         </tr>`).join("");
+      const tone = chain.bias === "buy" ? "up" : chain.bias === "sell" ? "down" : "range";
+      const label = chain.bias === "buy" ? "Buy" : chain.bias === "sell" ? "Sell" : "Neutral";
       return `
-        <h2>Open interest</h2>
+        <div class="oi-head">
+          <h2>Open interest</h2>
+          <div class="bias ${tone}">${label}</div>
+        </div>
+        <p>${escapeHtml(chain.biasDetail || "")}</p>
         <p class="hint">${escapeHtml(chain.nseSymbol || "")} · expiry ${escapeHtml(chain.expiry || "—")} · as of ${escapeHtml(chain.asOf || "time unavailable")} · underlying ${num(chain.underlying)} · <a href="https://www.nseindia.in/option-chain" target="_blank" rel="noopener noreferrer">NSE option chain</a></p>
         <div class="metrics">
           <div class="metric"><span>Call OI</span><b>${num(chain.callOi, 0)}</b></div>

@@ -45,6 +45,8 @@ export type OptionChain = {
   callChange: number;
   putChange: number;
   pcr: number | null;
+  bias: "buy" | "sell" | "neutral";
+  biasDetail: string;
   maxCallStrike: number | null;
   maxPutStrike: number | null;
   strikes: ChainStrike[];
@@ -141,6 +143,40 @@ function side(node: unknown): { oi: number | null; change: number | null; iv: nu
 function round(value: number, digits: number): number {
   const scale = 10 ** digits;
   return Math.round(value * scale) / scale;
+}
+
+function movePhrase(callChange: number, putChange: number): string {
+  if (putChange > callChange) {
+    if (putChange > 0 && callChange < 0) return "Puts were added and calls were unwound";
+    if (callChange < 0 && putChange < 0) return "Calls were unwound more than puts";
+    return "Puts were added ahead of calls";
+  }
+  if (callChange > 0 && putChange < 0) return "Calls were added and puts were unwound";
+  if (callChange < 0 && putChange < 0) return "Puts were unwound more than calls";
+  return "Calls were added ahead of puts";
+}
+
+function oiBias(callChange: number, putChange: number, pcr: number | null): { bias: OptionChain["bias"]; biasDetail: string } {
+  const scale = Math.max(Math.abs(callChange), Math.abs(putChange), 1);
+  const tilt = (putChange - callChange) / scale;
+  const pcrText = pcr === null ? "The put-call ratio is unavailable." : `The put-call ratio is ${pcr.toFixed(2)}.`;
+  const move = movePhrase(callChange, putChange);
+  if (tilt >= 0.15 && (pcr === null || pcr >= 0.7)) {
+    return { bias: "buy", biasDetail: `Buy. ${move}. ${pcrText}` };
+  }
+  if (tilt <= -0.15 && (pcr === null || pcr <= 1.2)) {
+    return { bias: "sell", biasDetail: `Sell. ${move}. ${pcrText}` };
+  }
+  if (tilt >= 0.15 || tilt <= -0.15) {
+    return {
+      bias: "neutral",
+      biasDetail: `Neutral. ${move}, and ${pcrText.charAt(0).toLowerCase()}${pcrText.slice(1)} That ratio does not confirm it.`,
+    };
+  }
+  return {
+    bias: "neutral",
+    biasDetail: `Neutral. Call and put open-interest changes are within 15% of each other. ${pcrText}`,
+  };
 }
 
 function summarize(rows: unknown[], underlying: number | null): {
@@ -258,6 +294,7 @@ export async function optionChainFor(target: ChainTarget): Promise<OptionChain |
     const underlying = num(records?.underlyingValue);
     const totals = summarize(rows, underlying);
     const pcr = totals.callOi > 0 ? round(totals.putOi / totals.callOi, 2) : null;
+    const bias = oiBias(totals.callChange, totals.putChange, pcr);
     return {
       ok: true,
       applicable: true,
@@ -272,11 +309,13 @@ export async function optionChainFor(target: ChainTarget): Promise<OptionChain |
       callChange: totals.callChange,
       putChange: totals.putChange,
       pcr,
+      bias: bias.bias,
+      biasDetail: bias.biasDetail,
       maxCallStrike: totals.maxCallStrike,
       maxPutStrike: totals.maxPutStrike,
       strikes: totals.strikes,
       source: PAGE,
-      note: "Open interest is in contracts for the nearest expiry, fetched from the NSE option-chain page when this symbol was loaded.",
+      note: "Buy means put open interest moved at least 15% further in the supportive direction than call open interest, with a put-call ratio of at least 0.70. Sell is the mirror, and the ratio must be 1.20 or below. Anything closer, or a ratio that disagrees, is Neutral. This is an open-interest read, not a trade recommendation.",
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "NSE option chain request failed.";
