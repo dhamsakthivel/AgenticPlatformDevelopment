@@ -133,6 +133,8 @@
     .scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
     .banner { margin-top: 14px; padding: 8px 10px; background: var(--range-bg); border: 1px solid var(--line); }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    .table-wrap { overflow-x: auto; }
+    .table-wrap table { min-width: 760px; }
     th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); }
     th:first-child, td:first-child { text-align: left; }
     th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -184,6 +186,7 @@
       </form>
       <div class="row" style="margin-top: 10px;">
         <button type="button" class="secondary" id="home">F&amp;O scan</button>
+        <button type="button" class="secondary" id="premarket">Premarket</button>
       </div>
       <div class="chips" id="chips"></div>
       <form id="ask-form" class="ask">
@@ -295,6 +298,39 @@
         ${scanRows("Put loaded, call unwound", scan.putLoaded)}
         ${scan.missed ? `<p class="hint">${num(scan.missed, 0)} names did not return a chain.</p>` : ""}`;
       board.querySelector("#refresh-scan")?.addEventListener("click", () => loadScan(true));
+      wireSymbols();
+    }
+    function rupees(value) {
+      const amount = Number(value);
+      if (!Number.isFinite(amount) || amount <= 0) return "—";
+      if (amount >= 1e7) return `₹${num(amount / 1e7)} cr`;
+      if (amount >= 1e5) return `₹${num(amount / 1e5)} lakh`;
+      return `₹${num(amount, 0)}`;
+    }
+    let premarketPayload = null;
+    let viewToken = 0;
+    function premarketTable(title, rows) {
+      const body = (rows || []).map((row, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button></td>
+          <td>${num(row.openPrice)}</td>
+          <td class="${changeClass(row.changePercent)}">${signed(row.changePercent)}%</td>
+          <td>${num(row.bidQty, 0)} @ ${num(row.bidPrice)}</td>
+          <td>${num(row.askQty, 0)} @ ${num(row.askPrice)}</td>
+          <td>${num(row.matchedQty, 0)}</td>
+          <td>${rupees(row.matchedValue)}</td>
+        </tr>`).join("");
+      return `
+        <h2>${escapeHtml(title)} <span class="hint">${(rows || []).length}</span></h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Rank</th><th>Symbol</th><th>Open</th><th>Change</th><th>Bid</th><th>Ask</th><th>Matched</th><th>Value</th></tr></thead>
+            <tbody>${body || "<tr><td colspan='8'>None on this scan.</td></tr>"}</tbody>
+          </table>
+        </div>`;
+    }
+    function wireSymbols() {
       board.querySelectorAll("[data-symbol]").forEach((button) => {
         button.addEventListener("click", () => {
           symbolInput.value = button.dataset.symbol;
@@ -302,7 +338,60 @@
         });
       });
     }
+    function paintPremarket(scan) {
+      premarketPayload = scan;
+      if (!scan.ready) {
+        board.innerHTML = `
+          <div class="head">
+            <div>
+              <h2 class="name">Premarket</h2>
+              <p class="sub">Next run ${escapeHtml(scan.nextRunLabel || "09:10 IST")}</p>
+            </div>
+            <button type="button" class="secondary" id="refresh-premarket">Run now</button>
+          </div>
+          <p class="hint">${escapeHtml(scan.note || "The premarket scan runs at 09:10 IST on weekdays.")}</p>`;
+        board.querySelector("#refresh-premarket")?.addEventListener("click", () => loadPremarket(true));
+        return;
+      }
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">Premarket</h2>
+            <p class="sub">${escapeHtml(scan.sessionLabel || "—")} · ${escapeHtml(scan.asOf || "time unavailable")} · ${num(scan.advances, 0)} up · ${num(scan.declines, 0)} down · ${num(scan.unchanged, 0)} unchanged</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-premarket">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(scan.note || "")} Next scheduled run ${escapeHtml(scan.nextRunLabel || "09:10 IST")}.</p>
+        ${premarketTable("Potential buy", scan.buys)}
+        ${premarketTable("Potential sell", scan.sells)}`;
+      board.querySelector("#refresh-premarket")?.addEventListener("click", () => loadPremarket(true));
+      wireSymbols();
+    }
+    async function loadPremarket(fresh) {
+      const token = ++viewToken;
+      if (!fresh && premarketPayload) {
+        paintPremarket(premarketPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Loading the premarket scan…</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the premarket scan…";
+      try {
+        const response = await fetch(fresh ? "/api/preopen?fresh=1" : "/api/preopen", { signal: AbortSignal.timeout(45000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The premarket scan did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Premarket scan is loaded. Open a name for the full board.";
+        paintPremarket(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The premarket scan did not answer in time." : (error.message || "The premarket scan did not answer."))}</p>`;
+      }
+    }
     async function loadScan(fresh) {
+      const token = ++viewToken;
       if (!fresh && scanPayload) {
         paintScan(scanPayload);
         return;
@@ -312,6 +401,7 @@
       try {
         const response = await fetch(fresh ? "/api/scan?fresh=1" : "/api/scan", { signal: AbortSignal.timeout(90000) });
         const payload = await response.json();
+        if (token !== viewToken) return;
         if (!response.ok || payload.ok === false) {
           board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The scan did not load.")}</p>`;
           return;
@@ -319,6 +409,7 @@
         statusEl.innerHTML = "<strong>Desk ready</strong><br />F&amp;O scan is loaded. Open a name for the full board.";
         paintScan(payload);
       } catch (error) {
+        if (token !== viewToken) return;
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The scan did not answer in time." : (error.message || "The scan did not answer."))}</p>`;
       }
     }
@@ -696,6 +787,7 @@
       statusEl.textContent = "Desk status unavailable. Stop the window with Ctrl+C and run npm run desk again.";
     });
     document.querySelector("#home").addEventListener("click", () => loadScan(false));
+    document.querySelector("#premarket").addEventListener("click", () => loadPremarket(false));
     loadScan(false);
   </script>
 </body>

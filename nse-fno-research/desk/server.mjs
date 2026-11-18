@@ -193,6 +193,27 @@ const server = createServer(async (req, res) => {
       sendJson(res, scan.ok === false ? 502 : 200, scan);
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/preopen") {
+      const preopen = await loadModule("bot/lib/preopen.ts");
+      const nextRunLabel = preopen.premarketLabel(preopen.nextPremarketAt(new Date()));
+      if (url.searchParams.get("fresh") === "1") {
+        const scan = await runPremarket();
+        sendJson(res, scan.ok === false ? 502 : 200, { ...scan, nextRunLabel });
+        return;
+      }
+      const saved = readPremarket();
+      if (!saved) {
+        sendJson(res, 200, {
+          ok: true,
+          ready: false,
+          nextRunLabel,
+          note: "The premarket scan runs at 09:10 IST on weekdays. The result stays on this desk after that.",
+        });
+        return;
+      }
+      sendJson(res, 200, { ...saved, nextRunLabel });
+      return;
+    }
     if (req.method === "POST" && url.pathname === "/api/research") {
       const body = await readBody(req);
       const symbol = typeof body.symbol === "string" ? body.symbol.trim() : "";
@@ -290,6 +311,69 @@ const server = createServer(async (req, res) => {
   }
 });
 
+const premarketFile = path.join(here, ".cache", "preopen-latest.json");
+let premarketRun = null;
+
+function readPremarket() {
+  try {
+    return JSON.parse(readFileSync(premarketFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writePremarket(body) {
+  mkdirSync(path.dirname(premarketFile), { recursive: true });
+  writeFileSync(premarketFile, JSON.stringify(body));
+}
+
+async function runPremarket() {
+  if (premarketRun) return premarketRun;
+  premarketRun = (async () => {
+    const preopen = await loadModule("bot/lib/preopen.ts");
+    const scan = await preopen.premarketScan();
+    if (scan.ok) writePremarket({ ...scan, savedAt: new Date().toISOString() });
+    return scan;
+  })().finally(() => {
+    premarketRun = null;
+  });
+  return premarketRun;
+}
+
+function armPremarket(preopen) {
+  const next = preopen.nextPremarketAt(new Date());
+  const wait = Math.max(1000, next.getTime() - Date.now());
+  console.log(`Premarket scan  ${preopen.premarketLabel(next)}`);
+  setTimeout(() => {
+    runPremarket()
+      .then((scan) => {
+        if (scan.ok) console.log(`Premarket saved  ${scan.sessionLabel} ${scan.asOf || ""}`.trim());
+        else console.log(`Premarket scan failed. ${scan.error}`);
+      })
+      .catch((error) => {
+        console.log(`Premarket scan failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      })
+      .finally(() => armPremarket(preopen));
+  }, wait);
+}
+
+async function startPremarket() {
+  const preopen = await loadModule("bot/lib/preopen.ts");
+  const saved = readPremarket();
+  const today = preopen.istDateKey(new Date());
+  if (preopen.premarketDue(new Date()) && saved?.sessionDate !== today) {
+    runPremarket()
+      .then((scan) => {
+        if (scan.ok) console.log(`Premarket saved  ${scan.sessionLabel} ${scan.asOf || ""}`.trim());
+        else console.log(`Premarket scan failed. ${scan.error}`);
+      })
+      .catch((error) => {
+        console.log(`Premarket scan failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      });
+  }
+  armPremarket(preopen);
+}
+
 function stopAgent() {
   if (agentChild && !agentChild.killed) agentChild.kill("SIGTERM");
 }
@@ -306,4 +390,7 @@ process.on("SIGTERM", () => {
 server.listen(deskPort, "127.0.0.1", () => {
   console.log(`NSE F&O desk  http://127.0.0.1:${deskPort}`);
   console.log(`Agent         ${agentUrl}`);
+  startPremarket().catch((error) => {
+    console.log(`Premarket schedule failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
 });
