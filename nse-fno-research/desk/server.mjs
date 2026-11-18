@@ -361,7 +361,7 @@ async function startPremarket() {
   const preopen = await loadModule("bot/lib/preopen.ts");
   const saved = readPremarket();
   const today = preopen.istDateKey(new Date());
-  if (preopen.premarketDue(new Date()) && saved?.sessionDate !== today) {
+  if (preopen.premarketDue(new Date()) && (saved?.sessionDate !== today || saved?.ruleVersion !== preopen.PREMARKET_RULE)) {
     runPremarket()
       .then((scan) => {
         if (scan.ok) console.log(`Premarket saved  ${scan.sessionLabel} ${scan.asOf || ""}`.trim());

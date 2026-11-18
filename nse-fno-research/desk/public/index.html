@@ -300,13 +300,6 @@
       board.querySelector("#refresh-scan")?.addEventListener("click", () => loadScan(true));
       wireSymbols();
     }
-    function rupees(value) {
-      const amount = Number(value);
-      if (!Number.isFinite(amount) || amount <= 0) return "—";
-      if (amount >= 1e7) return `₹${num(amount / 1e7)} cr`;
-      if (amount >= 1e5) return `₹${num(amount / 1e5)} lakh`;
-      return `₹${num(amount, 0)}`;
-    }
     let premarketPayload = null;
     let viewToken = 0;
     function premarketTable(title, rows) {
@@ -314,19 +307,18 @@
         <tr>
           <td>${index + 1}</td>
           <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button></td>
-          <td>${num(row.openPrice)}</td>
-          <td class="${changeClass(row.changePercent)}">${signed(row.changePercent)}%</td>
+          <td>${num(row.previousClose)}</td>
           <td>${num(row.bidQty, 0)} @ ${num(row.bidPrice)}</td>
           <td>${num(row.askQty, 0)} @ ${num(row.askPrice)}</td>
-          <td>${num(row.matchedQty, 0)}</td>
-          <td>${rupees(row.matchedValue)}</td>
+          <td class="${changeClass(row.bidVsClose)}">${signed(row.bidVsClose)}%</td>
+          <td class="${changeClass(row.askVsClose)}">${signed(row.askVsClose)}%</td>
         </tr>`).join("");
       return `
-        <h2>${escapeHtml(title)} <span class="hint">${(rows || []).length}</span></h2>
+        <h2>${escapeHtml(title)}</h2>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Rank</th><th>Symbol</th><th>Open</th><th>Change</th><th>Bid</th><th>Ask</th><th>Matched</th><th>Value</th></tr></thead>
-            <tbody>${body || "<tr><td colspan='8'>None on this scan.</td></tr>"}</tbody>
+            <thead><tr><th>Rank</th><th>Symbol</th><th>Previous close</th><th>Bid</th><th>Ask</th><th>Bid vs close</th><th>Ask vs close</th></tr></thead>
+            <tbody>${body || "<tr><td colspan='7'>None on this scan.</td></tr>"}</tbody>
           </table>
         </div>`;
     }
@@ -362,8 +354,8 @@
           <button type="button" class="secondary" id="refresh-premarket">Refresh</button>
         </div>
         <p class="hint">${escapeHtml(scan.note || "")} Next scheduled run ${escapeHtml(scan.nextRunLabel || "09:10 IST")}.</p>
-        ${premarketTable("Potential buy", scan.buys)}
-        ${premarketTable("Potential sell", scan.sells)}`;
+        ${premarketTable("Top 4 buy", scan.buys)}
+        ${premarketTable("Top 4 sell", scan.sells)}`;
       board.querySelector("#refresh-premarket")?.addEventListener("click", () => loadPremarket(true));
       wireSymbols();
     }

@@ -11,6 +11,8 @@ const IST_MS = (5 * 60 + 30) * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const TOP = 4;
+export const PREMARKET_RULE = 2;
 
 export type PremarketRow = {
   symbol: string;
@@ -21,6 +23,8 @@ export type PremarketRow = {
   bidQty: number;
   askPrice: number;
   askQty: number;
+  bidVsClose: number;
+  askVsClose: number;
   matchedQty: number;
   matchedValue: number;
 };
@@ -37,6 +41,7 @@ export type PremarketScan = {
   unchanged: number;
   scanned: number;
   quantityFloor: number;
+  ruleVersion: number;
   buys: PremarketRow[];
   sells: PremarketRow[];
   source: typeof PAGE;
@@ -218,6 +223,10 @@ function sessionFrom(timestamp: string | null, now: Date): { key: string; label:
   };
 }
 
+function versusClose(price: number, previous: number): number {
+  return previous > 0 ? ((price - previous) / previous) * 100 : 0;
+}
+
 function toRow(row: BookRow): PremarketRow {
   return {
     symbol: row.symbol,
@@ -228,6 +237,8 @@ function toRow(row: BookRow): PremarketRow {
     bidQty: row.bidQty,
     askPrice: row.ask,
     askQty: row.askQty,
+    bidVsClose: round(versusClose(row.bid, row.prev), 2),
+    askVsClose: round(versusClose(row.ask, row.prev), 2),
     matchedQty: row.qty,
     matchedValue: row.value,
   };
@@ -264,22 +275,18 @@ function rankBook(body: Record<string, unknown>, now: Date): PremarketScan {
   }
   const quantities = parsed.map((row) => row.qty).sort((a, b) => a - b);
   const quantityFloor = quantities.length > 0 ? quantities[Math.floor(quantities.length * 0.4)] : 0;
-  const usable = parsed.filter((row) => row.qty >= quantityFloor && !(row.bid > 0 && row.ask > 0 && row.bid > row.ask + 0.001));
-  const held = (row: BookRow) => {
-    const bidDist = Math.abs(row.bid - row.price);
-    const askDist = Math.abs(row.ask - row.price);
-    return {
-      onBid: row.bid > 0 && bidDist <= askDist && bidDist < 0.051,
-      onAsk: row.ask > 0 && askDist < bidDist && askDist < 0.051,
-    };
-  };
+  const usable = parsed.filter(
+    (row) => row.prev > 0 && row.bid > 0 && row.ask > 0 && row.qty >= quantityFloor && row.bid + 0.001 < row.ask,
+  );
   const buys = usable
-    .filter((row) => row.pct > 0 && held(row).onBid && row.bidQty > row.askQty)
-    .sort((a, b) => b.pct - a.pct || b.qty - a.qty)
+    .filter((row) => row.bid > row.prev && row.ask >= row.prev && row.bidQty > row.askQty)
+    .sort((a, b) => versusClose(b.bid, b.prev) - versusClose(a.bid, a.prev) || b.bidQty - a.bidQty)
+    .slice(0, TOP)
     .map(toRow);
   const sells = usable
-    .filter((row) => row.pct < 0 && held(row).onAsk && row.askQty > row.bidQty)
-    .sort((a, b) => a.pct - b.pct || b.askQty - a.askQty)
+    .filter((row) => row.ask < row.prev && row.bid <= row.prev && row.askQty > row.bidQty)
+    .sort((a, b) => versusClose(a.ask, a.prev) - versusClose(b.ask, b.prev) || b.askQty - a.askQty)
+    .slice(0, TOP)
     .map(toRow);
   const session = sessionFrom(str(body.timestamp), now);
   const floorText = quantityFloor.toLocaleString("en-IN");
@@ -295,10 +302,11 @@ function rankBook(body: Record<string, unknown>, now: Date): PremarketScan {
     unchanged: num(body.unchanged),
     scanned: rawRows.length,
     quantityFloor,
+    ruleVersion: PREMARKET_RULE,
     buys,
     sells,
     source: PAGE,
-    note: `A buy opened higher and the print is on the bid, with more shares bid there than offered. A sell opened lower and the print is on the ask, with more shares offered than bid. Matched quantity below ${floorText} shares is left out, as is a book whose best bid sits above its best ask.`,
+    note: `Each name is compared with the previous close. A buy has the bid and the ask above that close, with more shares on the bid. A sell has both below that close, with more shares on the ask. The four buys are the bids furthest above yesterday. The four sells are the asks furthest below yesterday. Matched quantity below ${floorText} shares is left out.`,
   };
 }
 
