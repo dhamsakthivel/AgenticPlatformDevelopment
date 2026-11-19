@@ -48,7 +48,9 @@ export type OptionChain = {
   bias: "buy" | "sell" | "neutral";
   biasDetail: string;
   maxCallStrike: number | null;
+  maxCallOi: number | null;
   maxPutStrike: number | null;
+  maxPutOi: number | null;
   strikes: ChainStrike[];
   source: "https://www.nseindia.in/option-chain";
   note: string;
@@ -245,7 +247,9 @@ function summarize(rows: unknown[], underlying: number | null): {
   callChange: number;
   putChange: number;
   maxCallStrike: number | null;
+  maxCallOi: number | null;
   maxPutStrike: number | null;
+  maxPutOi: number | null;
   strikes: ChainStrike[];
 } {
   let callOi = 0;
@@ -255,7 +259,9 @@ function summarize(rows: unknown[], underlying: number | null): {
   let maxCall = -1;
   let maxPut = -1;
   let maxCallStrike: number | null = null;
+  let maxCallOi: number | null = null;
   let maxPutStrike: number | null = null;
+  let maxPutOi: number | null = null;
   const parsed: { strike: number; callOi: number | null; callChange: number | null; callIv: number | null; putOi: number | null; putChange: number | null; putIv: number | null }[] = [];
   for (const row of rows) {
     const item = record(row);
@@ -268,6 +274,7 @@ function summarize(rows: unknown[], underlying: number | null): {
       if (call.oi > maxCall) {
         maxCall = call.oi;
         maxCallStrike = strike;
+        maxCallOi = call.oi;
       }
     }
     if (put.oi !== null) {
@@ -275,6 +282,7 @@ function summarize(rows: unknown[], underlying: number | null): {
       if (put.oi > maxPut) {
         maxPut = put.oi;
         maxPutStrike = strike;
+        maxPutOi = put.oi;
       }
     }
     callChange += call.change ?? 0;
@@ -310,7 +318,9 @@ function summarize(rows: unknown[], underlying: number | null): {
     callChange,
     putChange,
     maxCallStrike,
+    maxCallOi,
     maxPutStrike,
+    maxPutOi,
     strikes: slice.map((row) => ({ ...row, atTheMoney: row.strike === parsed[atm]?.strike })),
   };
 }
@@ -372,7 +382,9 @@ export async function optionChainFor(target: ChainTarget): Promise<OptionChain |
       bias: bias.bias,
       biasDetail: bias.biasDetail,
       maxCallStrike: totals.maxCallStrike,
+      maxCallOi: totals.maxCallOi,
       maxPutStrike: totals.maxPutStrike,
+      maxPutOi: totals.maxPutOi,
       strikes: totals.strikes,
       source: PAGE,
       note: "Buy means put open interest moved at least 15% further in the supportive direction than call open interest, with a put-call ratio of at least 0.70. Sell is the mirror, and the ratio must be 1.20 or below. Anything closer, or a ratio that disagrees, is Neutral. This is an open-interest read, not a trade recommendation.",
