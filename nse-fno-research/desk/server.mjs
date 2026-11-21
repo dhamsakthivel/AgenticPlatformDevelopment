@@ -17,16 +17,28 @@ let agentChild = null;
 let agentLog = "";
 const modules = new Map();
 
+function moduleFile(rel) {
+  return path.join(here, ".cache", rel.replace(/[\\/]/g, "_").replace(/\.ts$/, ".mjs"));
+}
+
 async function loadModule(rel) {
   const cached = modules.get(rel);
   if (cached) return cached;
   const sourcePath = path.join(projectDir, rel);
   const source = readFileSync(sourcePath, "utf8");
-  const js = ts.transpileModule(source, {
+  let js = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
     fileName: sourcePath,
   }).outputText;
-  const file = path.join(here, ".cache", rel.replace(/[\\/]/g, "_").replace(/\.ts$/, ".mjs"));
+  const specs = [...js.matchAll(/from\s+["'](\.\/[^"']+)["']/g)].map((match) => match[1]);
+  for (const spec of specs) {
+    const depRel = path.posix.normalize(path.posix.join(path.posix.dirname(rel), spec));
+    const dep = depRel.endsWith(".ts") ? depRel : `${depRel.replace(/\.js$/, "")}.ts`;
+    await loadModule(dep);
+    const href = pathToFileURL(moduleFile(dep)).href;
+    js = js.replaceAll(`"${spec}"`, JSON.stringify(href)).replaceAll(`'${spec}'`, JSON.stringify(href));
+  }
+  const file = moduleFile(rel);
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, js);
   const loaded = await import(pathToFileURL(file).href);
@@ -212,6 +224,22 @@ const server = createServer(async (req, res) => {
         return;
       }
       sendJson(res, 200, { ...saved, nextRunLabel });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/direction") {
+      if (url.searchParams.get("fresh") === "1") {
+        const report = await runDirection();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      const saved = readDirection();
+      const direction = await loadModule("bot/lib/direction.ts");
+      if (!saved || saved.ruleVersion !== direction.DIRECTION_RULE || saved.sessions?.at(-1) !== direction.expectedSession(new Date())) {
+        const report = await runDirection();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      sendJson(res, 200, saved);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/preopen") {
@@ -422,6 +450,35 @@ async function runMorning() {
     morningRun = null;
   });
   return morningRun;
+}
+
+const directionFile = path.join(here, ".cache", "direction-latest.json");
+let directionRun = null;
+
+function readDirection() {
+  try {
+    return JSON.parse(readFileSync(directionFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeDirection(body) {
+  mkdirSync(path.dirname(directionFile), { recursive: true });
+  writeFileSync(directionFile, JSON.stringify(body));
+}
+
+async function runDirection() {
+  if (directionRun) return directionRun;
+  directionRun = (async () => {
+    const direction = await loadModule("bot/lib/direction.ts");
+    const report = await direction.directionReport();
+    if (report.ok) writeDirection({ ...report, savedAt: new Date().toISOString() });
+    return report;
+  })().finally(() => {
+    directionRun = null;
+  });
+  return directionRun;
 }
 
 function morningStale(morning, saved, now = new Date()) {

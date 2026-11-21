@@ -390,6 +390,10 @@ function round(value: number, digits = 2): number {
   return Math.round(value * scale) / scale;
 }
 
+export function fnoBook(): NameRef[] {
+  return names();
+}
+
 function names(): NameRef[] {
   const out: NameRef[] = [];
   for (const line of BOOKS.split("\n")) {

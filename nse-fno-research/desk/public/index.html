@@ -190,6 +190,7 @@
       <div class="row" style="margin-top: 10px;">
         <button type="button" class="secondary" id="home">F&amp;O scan</button>
         <button type="button" class="secondary" id="morning">Morning</button>
+        <button type="button" class="secondary" id="direction">Direction</button>
         <button type="button" class="secondary" id="premarket">Premarket</button>
       </div>
       <div class="chips" id="chips"></div>
@@ -305,6 +306,7 @@
       wireSymbols();
     }
     let morningPayload = null;
+    let directionPayload = null;
     let premarketPayload = null;
     let viewToken = 0;
     function premarketTable(title, rows) {
@@ -449,6 +451,74 @@
       } catch (error) {
         if (token !== viewToken) return;
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The morning brief did not answer in time." : (error.message || "The morning brief did not answer."))}</p>`;
+      }
+    }
+    function directionCell(day) {
+      if (!day) return "<td>—</td>";
+      const tone = day.reading === "New shorts" || day.reading === "Longs leaving" ? "down" : day.reading === "New longs" || day.reading === "Shorts covering" ? "up" : "";
+      return `<td class="${tone}"><b>${escapeHtml(day.reading)}</b><div class="hint">${num(day.close)} · ${signed(day.priceChange)}% vs prior<br />OI ${signed(day.oiChangePercent)}%</div></td>`;
+    }
+    function directionRows(rows) {
+      const body = (rows || []).map((row) => `
+        <tr>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button><div class="hint">${escapeHtml(row.sector || "")} · ${escapeHtml(row.name || "")}</div></td>
+          ${directionCell(row.days?.[0])}
+          ${directionCell(row.days?.[1])}
+          ${directionCell(row.days?.[2])}
+          <td class="${changeClass(row.change3)}">${signed(row.change3)}%</td>
+        </tr>`).join("");
+      const labels = (rows?.[0]?.days || []).map((day) => escapeHtml(day.label || ""));
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>${labels[0] || "Day 1"}</th><th>${labels[1] || "Day 2"}</th><th>${labels[2] || "Day 3"}</th><th>3-day move</th></tr></thead>
+            <tbody>${body || "<tr><td colspan='5'>None in the last three sessions.</td></tr>"}</tbody>
+          </table>
+        </div>`;
+    }
+    function paintDirection(report) {
+      directionPayload = report;
+      const labels = (report.sessions || []).map((key) => {
+        const [year, month, day] = key.split("-");
+        return `${Number(day)} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(month) - 1]} ${year}`;
+      });
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">Futures direction</h2>
+            <p class="sub">${escapeHtml(labels.join(" · ") || "Last three sessions")} · ${num((report.shorts || []).length, 0)} new shorts · ${num((report.longs || []).length, 0)} new longs</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-direction">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(report.note || "")}</p>
+        <h2>New shorts</h2>
+        ${directionRows(report.shorts)}
+        <h2>New longs</h2>
+        ${directionRows(report.longs)}`;
+      board.querySelector("#refresh-direction")?.addEventListener("click", () => loadDirection(true));
+      wireSymbols();
+    }
+    async function loadDirection(fresh) {
+      const token = ++viewToken;
+      if (!fresh && directionPayload) {
+        paintDirection(directionPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Reading the last three futures sessions…</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading futures direction…";
+      try {
+        const response = await fetch(fresh ? "/api/direction?fresh=1" : "/api/direction", { signal: AbortSignal.timeout(90000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The futures direction did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Futures direction is loaded. Open a name for the full board.";
+        paintDirection(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The futures direction did not answer in time." : (error.message || "The futures direction did not answer."))}</p>`;
       }
     }
     async function loadPremarket(fresh) {
@@ -897,6 +967,7 @@
     });
     document.querySelector("#home").addEventListener("click", () => loadScan(false));
     document.querySelector("#morning").addEventListener("click", () => loadMorning(false));
+    document.querySelector("#direction").addEventListener("click", () => loadDirection(false));
     document.querySelector("#premarket").addEventListener("click", () => loadPremarket(false));
     loadScan(false);
   </script>
