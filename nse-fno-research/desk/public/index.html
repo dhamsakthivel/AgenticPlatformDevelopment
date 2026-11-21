@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NSE F&O desk</title>
+  <style>
+    :root {
+      --paper: #f3efe6;
+      --panel: #fbf9f4;
+      --ink: #1a1814;
+      --muted: #6d655c;
+      --line: #d8d0c3;
+      --up: #1d6b3a;
+      --up-bg: #e6f3ea;
+      --down: #9a3412;
+      --down-bg: #f8ebe4;
+      --range: #5c5346;
+      --range-bg: #efe8dc;
+      --focus: #1a1814;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    button, input, textarea { font: inherit; color: inherit; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      padding: 22px 28px 16px;
+      border-bottom: 1px solid var(--ink);
+    }
+    .mast { letter-spacing: 0.14em; font-size: 12px; text-transform: uppercase; margin: 0 0 4px; }
+    h1 { font-family: Palatino, "Palatino Linotype", Georgia, serif; font-weight: 500; font-size: 34px; line-height: 1; margin: 0; }
+    .status { font-size: 13px; color: var(--muted); text-align: right; }
+    .status strong { color: var(--ink); font-weight: 600; }
+    main {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: calc(100vh - 92px);
+      min-width: 0;
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      padding: 20px;
+      min-width: 0;
+    }
+    section.board { padding: 20px 28px 40px; min-width: 0; }
+    label { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    input[type="text"], textarea {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      padding: 9px 10px;
+    }
+    input[type="text"]:focus, textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+    textarea { min-height: 96px; resize: vertical; }
+    button {
+      background: var(--ink);
+      color: var(--paper);
+      border: 1px solid var(--ink);
+      border-radius: 2px;
+      padding: 9px 12px;
+      cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); }
+    button.link { background: transparent; color: var(--ink); border: 0; padding: 0; font-weight: 600; }
+    button.link:hover { text-decoration: underline; }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 22px; }
+    .chips button { background: transparent; color: var(--ink); padding: 4px 8px; font-size: 13px; }
+    .ask { margin-top: 8px; display: grid; gap: 8px; }
+    .hint { color: var(--muted); font-size: 13px; margin: 0; }
+    .head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 14px;
+    }
+    .statuses { display: flex; flex-wrap: wrap; gap: 18px; justify-content: flex-end; }
+    .status-card { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .status-label {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .name { font-family: Palatino, Georgia, serif; font-size: 28px; margin: 0; }
+    .sub { color: var(--muted); margin: 4px 0 0; }
+    .bias {
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+    }
+    .bias.up { color: var(--up); background: var(--up-bg); }
+    .bias.down { color: var(--down); background: var(--down-bg); }
+    .bias.range { color: var(--range); background: var(--range-bg); }
+    .price { font-variant-numeric: tabular-nums; font-size: 40px; margin: 16px 0 0; letter-spacing: -0.03em; }
+    .price span { font-size: 16px; margin-left: 8px; }
+    .up-text { color: var(--up); }
+    .down-text { color: var(--down); }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+    .metrics.three { grid-template-columns: repeat(3, 1fr); }
+    .metric { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; }
+    .metric b { display: block; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
+    .metric span { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .track-wrap { margin-top: 18px; }
+    .track { position: relative; height: 8px; background: #e4ddd1; margin: 28px 8px 8px; }
+    .mark { position: absolute; top: -5px; width: 2px; height: 18px; background: var(--ink); }
+    .mark.sma { background: #8a8175; height: 14px; top: -3px; }
+    .dot {
+      position: absolute;
+      top: -6px;
+      width: 14px;
+      height: 14px;
+      margin-left: -7px;
+      border-radius: 50%;
+      background: var(--ink);
+      border: 2px solid var(--paper);
+    }
+    .scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .banner { margin-top: 14px; padding: 8px 10px; background: var(--range-bg); border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    .table-wrap { overflow-x: auto; max-width: 100%; }
+    .table-wrap table { min-width: 760px; }
+    th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    th:first-child, td:first-child { text-align: left; }
+    th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    h2 { font-family: Palatino, Georgia, serif; font-weight: 500; font-size: 22px; margin: 28px 0 8px; }
+    .note { background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; min-height: 72px; }
+    .note h3 { font-size: 16px; margin: 12px 0 4px; }
+    .note p { margin: 0 0 8px; }
+    .error { color: var(--down); }
+    .gap { color: var(--muted); font-size: 13px; margin-top: 18px; }
+    .rules { list-style: none; padding: 0; margin: 8px 0 0; }
+    .rules li { display: grid; grid-template-columns: 64px 1fr; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .rules b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .rules li small { grid-column: 2; color: var(--muted); font-size: 13px; }
+    .rules li.pass b { color: var(--up); }
+    .rules li.fail b { color: var(--down); }
+    tr.support { background: var(--up-bg); }
+    tr.resistance { background: var(--down-bg); }
+    tr.atm { background: var(--range-bg); }
+    .news-list { list-style: none; padding: 0; margin: 8px 0 0; }
+    .news-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .news-list a { color: var(--ink); }
+    .news-list span { display: block; color: var(--muted); font-size: 12px; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      .metrics, .metrics.three { grid-template-columns: repeat(2, 1fr); }
+      header { padding: 16px; }
+      section.board { padding: 16px; }
+      .price { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="mast">National Stock Exchange · futures and options</p>
+      <h1>Research desk</h1>
+    </div>
+    <p class="status" id="status">Checking the agent…</p>
+  </header>
+  <main>
+    <aside>
+      <form id="symbol-form">
+        <label for="symbol">Underlying</label>
+        <div class="row">
+          <input id="symbol" name="symbol" type="text" value="" placeholder="RELIANCE" autocomplete="off" maxlength="32" />
+          <button type="submit">Load</button>
+        </div>
+      </form>
+      <div class="row" style="margin-top: 10px;">
+        <button type="button" class="secondary" id="home">F&amp;O scan</button>
+        <button type="button" class="secondary" id="morning">Morning</button>
+        <button type="button" class="secondary" id="premarket">Premarket</button>
+      </div>
+      <div class="chips" id="chips"></div>
+      <form id="ask-form" class="ask">
+        <label for="question">Ask the agent</label>
+        <textarea id="question" placeholder="Write an NSE F&O research note. Cover published results, technicals, and the trend."></textarea>
+        <div class="row">
+          <button type="submit" id="ask">Write the note</button>
+          <button type="button" class="secondary" id="clear">New chat</button>
+        </div>
+        <p class="hint">The board uses the agent tools and does not need a model sign-in. The written note does.</p>
+      </form>
+    </aside>
+    <section class="board" id="board" aria-live="polite">
+      <p class="hint">Scanning F&amp;O open interest…</p>
+    </section>
+  </main>
+  <script>
+    const chips = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "INDIAVIX", "RELIANCE", "HDFCBANK", "TCS", "INFY"];
+    const chipBox = document.querySelector("#chips");
+    const board = document.querySelector("#board");
+    const statusEl = document.querySelector("#status");
+    const symbolInput = document.querySelector("#symbol");
+    let session = null;
+    let streamAbort = null;
+
+    chips.forEach((name) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = name;
+      button.addEventListener("click", () => {
+        symbolInput.value = name;
+        loadSymbol(name);
+      });
+      chipBox.appendChild(button);
+    });
+
+    document.querySelector("#symbol-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      loadSymbol(symbolInput.value);
+    });
+    document.querySelector("#ask-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      askAgent();
+    });
+    document.querySelector("#clear").addEventListener("click", () => {
+      session = null;
+      if (streamAbort) streamAbort.abort();
+      const note = document.querySelector("#note");
+      if (note) note.innerHTML = "<p class='hint'>Chat cleared. The next question starts a new agent session.</p>";
+    });
+
+    function num(value, digits = 2) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+      return Number(value).toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    }
+    function signed(value, digits = 2) {
+      if (value === null || value === undefined) return "—";
+      const text = num(value, digits);
+      return value > 0 ? `+${text}` : text;
+    }
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
+    }
+    function renderNote(text) {
+      return escapeHtml(text).split("\n").map((line) => {
+        const rich = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        if (line.startsWith("## ")) return `<h3>${rich.slice(3)}</h3>`;
+        if (line.startsWith("# ")) return `<h2>${rich.slice(2)}</h2>`;
+        if (!line.trim()) return "";
+        return `<p>${rich}</p>`;
+      }).join("");
+    }
+    function changeClass(value) {
+      if (value > 0) return "up-text";
+      if (value < 0) return "down-text";
+      return "";
+    }
+
+    let scanPayload = null;
+    function scanRows(title, rows) {
+      const body = (rows || []).map((row) => `
+        <tr>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button></td>
+          <td>${num(row.underlying)}</td>
+          <td class="${changeClass(row.changePercent)}">${signed(row.changePercent)}%</td>
+          <td class="${row.callChange > 0 ? "up-text" : "down-text"}">${signed(row.callChange, 0)}</td>
+          <td class="${row.putChange > 0 ? "up-text" : "down-text"}">${signed(row.putChange, 0)}</td>
+        </tr>`).join("");
+      return `
+        <h2>${escapeHtml(title)} <span class="hint">${(rows || []).length}</span></h2>
+        <table>
+          <thead><tr><th>Symbol</th><th>Underlying</th><th>Change</th><th>Call change</th><th>Put change</th></tr></thead>
+          <tbody>${body || "<tr><td colspan='5'>None on this scan.</td></tr>"}</tbody>
+        </table>`;
+    }
+    function paintScan(scan) {
+      scanPayload = scan;
+      const matched = (scan.callLoaded?.length || 0) + (scan.putLoaded?.length || 0);
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">F&amp;O scan</h2>
+            <p class="sub">Nearest expiry ${escapeHtml(scan.expiry || "—")} · ${escapeHtml(scan.asOf || "time unavailable")} · ${matched} of ${num(scan.scanned, 0)} names</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-scan">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(scan.note || "")}</p>
+        ${scanRows("Call loaded, put unwound", scan.callLoaded)}
+        ${scanRows("Put loaded, call unwound", scan.putLoaded)}
+        ${scan.missed ? `<p class="hint">${num(scan.missed, 0)} names did not return a chain.</p>` : ""}`;
+      board.querySelector("#refresh-scan")?.addEventListener("click", () => loadScan(true));
+      wireSymbols();
+    }
+    let morningPayload = null;
+    let premarketPayload = null;
+    let viewToken = 0;
+    function premarketTable(title, rows) {
+      const body = (rows || []).map((row, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button></td>
+          <td>${num(row.previousClose)}</td>
+          <td>${num(row.bidQty, 0)} @ ${num(row.bidPrice)}</td>
+          <td>${num(row.askQty, 0)} @ ${num(row.askPrice)}</td>
+          <td class="${changeClass(row.bidVsClose)}">${signed(row.bidVsClose)}%</td>
+          <td class="${changeClass(row.askVsClose)}">${signed(row.askVsClose)}%</td>
+        </tr>`).join("");
+      return `
+        <h2>${escapeHtml(title)}</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Rank</th><th>Symbol</th><th>Previous close</th><th>Bid</th><th>Ask</th><th>Bid vs close</th><th>Ask vs close</th></tr></thead>
+            <tbody>${body || "<tr><td colspan='7'>None on this scan.</td></tr>"}</tbody>
+          </table>
+        </div>`;
+    }
+    function wireSymbols() {
+      board.querySelectorAll("[data-symbol]").forEach((button) => {
+        button.addEventListener("click", () => {
+          symbolInput.value = button.dataset.symbol;
+          loadSymbol(button.dataset.symbol);
+        });
+      });
+    }
+    function paintPremarket(scan) {
+      premarketPayload = scan;
+      if (!scan.ready) {
+        board.innerHTML = `
+          <div class="head">
+            <div>
+              <h2 class="name">Premarket</h2>
+              <p class="sub">Next run ${escapeHtml(scan.nextRunLabel || "09:10 IST")}</p>
+            </div>
+            <button type="button" class="secondary" id="refresh-premarket">Run now</button>
+          </div>
+          <p class="hint">${escapeHtml(scan.note || "The premarket scan runs at 09:10 IST on weekdays.")}</p>`;
+        board.querySelector("#refresh-premarket")?.addEventListener("click", () => loadPremarket(true));
+        return;
+      }
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">Premarket</h2>
+            <p class="sub">${escapeHtml(scan.sessionLabel || "—")} · ${escapeHtml(scan.asOf || "time unavailable")} · ${num(scan.advances, 0)} up · ${num(scan.declines, 0)} down · ${num(scan.unchanged, 0)} unchanged</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-premarket">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(scan.note || "")} Next scheduled run ${escapeHtml(scan.nextRunLabel || "09:10 IST")}.</p>
+        ${premarketTable("Top 4 buy", scan.buys)}
+        ${premarketTable("Top 4 sell", scan.sells)}`;
+      board.querySelector("#refresh-premarket")?.addEventListener("click", () => loadPremarket(true));
+      wireSymbols();
+    }
+    function sessionText(sessions) {
+      return (sessions || []).map((value) => `${signed(value)}%`).join(", ") || "—";
+    }
+    function morningRows(rows) {
+      const body = (rows || []).map((row) => `
+        <tr>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button><div class="hint">${escapeHtml(row.sector ? `${row.sector} · ` : "")}${escapeHtml(row.name || "")}</div></td>
+          <td>${sessionText(row.sessions)}</td>
+          <td>${num(row.close)}</td>
+          <td class="${changeClass(row.changePercent)}">${signed(row.changePercent)}%</td>
+          <td>${escapeHtml(row.deal || "—")}</td>
+          <td class="${row.action === "Buy watch" ? "up" : row.action === "Sell watch" ? "down" : ""}"><b>${escapeHtml(row.action || "")}</b><div class="hint">${escapeHtml(row.reason || "")}${row.headline ? ` ${escapeHtml(row.headline)}` : ""}</div></td>
+        </tr>`).join("");
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>Last 3 sessions</th><th>Close</th><th>Last session</th><th>Bulk or block</th><th>Action</th></tr></thead>
+            <tbody>${body || "<tr><td colspan='6'>None.</td></tr>"}</tbody>
+          </table>
+        </div>`;
+    }
+    function paintMorning(report) {
+      morningPayload = report;
+      if (!report.ready) {
+        board.innerHTML = `
+          <div class="head">
+            <div>
+              <h2 class="name">Morning brief</h2>
+              <p class="sub">Next run ${escapeHtml(report.nextRunLabel || "08:45 IST")}</p>
+            </div>
+            <button type="button" class="secondary" id="refresh-morning">Run now</button>
+          </div>
+          <p class="hint">${escapeHtml(report.note || "The morning brief runs at 08:45 IST on weekdays.")}</p>`;
+        board.querySelector("#refresh-morning")?.addEventListener("click", () => loadMorning(true));
+        return;
+      }
+      const globals = (report.globals || []).map((item) => `<div class="metric"><span>${escapeHtml(item.label)}</span><b class="${changeClass(item.changePercent)}">${signed(item.changePercent)}%</b></div>`).join("");
+      const themes = (report.themes || []).map((line) => `<p>${escapeHtml(line)}</p>`).join("");
+      const headlines = (report.headlines || []).map((item) => `<li><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a><span>${escapeHtml(item.source)}</span></li>`).join("");
+      const sectors = (report.sectors || []).map((sector) => `
+        <h2>${escapeHtml(sector.sector)} <span class="hint">${signed(sector.median)}% median · ${num(sector.count, 0)} names</span></h2>
+        ${morningRows(sector.rows)}`).join("");
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">Morning brief</h2>
+            <p class="sub">${escapeHtml(report.briefingLabel || "—")} · session ${escapeHtml(report.marketLabel || "—")} · ${num(report.advances, 0)} up · ${num(report.declines, 0)} down</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-morning">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(report.note || "")} Next scheduled run ${escapeHtml(report.nextRunLabel || "08:45 IST")}.</p>
+        <div class="metrics">${globals}</div>
+        ${themes}
+        <p class="hint">${(report.deals || []).length
+          ? `${num((report.deals || []).length, 0)} F&O bulk or block rows in the NSE file${report.dealAsOf ? ` dated ${escapeHtml(report.dealAsOf)}` : ""}.`
+          : `The NSE bulk and block file${report.dealAsOf ? ` dated ${escapeHtml(report.dealAsOf)}` : ""} had no F&O name. Intraday prints below that disclosure are not in this brief.`}</p>
+        <h2>Potential actions</h2>
+        ${morningRows(report.lead)}
+        <h2>Newsletter headlines</h2>
+        <ul class="news-list">${headlines || "<li>No headlines returned.</li>"}</ul>
+        ${sectors}`;
+      board.querySelector("#refresh-morning")?.addEventListener("click", () => loadMorning(true));
+      wireSymbols();
+    }
+    async function loadMorning(fresh) {
+      const token = ++viewToken;
+      if (!fresh && morningPayload) {
+        paintMorning(morningPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Building the 08:45 brief from the previous session, the wires, and the deal file…</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the morning brief…";
+      try {
+        const response = await fetch(fresh ? "/api/morning?fresh=1" : "/api/morning", { signal: AbortSignal.timeout(90000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The morning brief did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Morning brief is loaded. Open a name for the full board.";
+        paintMorning(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The morning brief did not answer in time." : (error.message || "The morning brief did not answer."))}</p>`;
+      }
+    }
+    async function loadPremarket(fresh) {
+      const token = ++viewToken;
+      if (!fresh && premarketPayload) {
+        paintPremarket(premarketPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Loading the premarket scan…</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the premarket scan…";
+      try {
+        const response = await fetch(fresh ? "/api/preopen?fresh=1" : "/api/preopen", { signal: AbortSignal.timeout(45000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The premarket scan did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Premarket scan is loaded. Open a name for the full board.";
+        paintPremarket(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The premarket scan did not answer in time." : (error.message || "The premarket scan did not answer."))}</p>`;
+      }
+    }
+    async function loadScan(fresh) {
+      const token = ++viewToken;
+      if (!fresh && scanPayload) {
+        paintScan(scanPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Scanning every equity F&amp;O name. This takes a few seconds.</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Scanning open interest…";
+      try {
+        const response = await fetch(fresh ? "/api/scan?fresh=1" : "/api/scan", { signal: AbortSignal.timeout(90000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The scan did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />F&amp;O scan is loaded. Open a name for the full board.";
+        paintScan(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The scan did not answer in time." : (error.message || "The scan did not answer."))}</p>`;
+      }
+    }
+    async function loadSymbol(raw) {
+      const symbol = raw.trim();
+      if (!symbol) return;
+      symbolInput.value = symbol.toUpperCase();
+      board.innerHTML = `<p class="hint">Loading ${escapeHtml(symbolInput.value)}…</p>`;
+      try {
+        const response = await fetch("/api/research", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ symbol }),
+          signal: AbortSignal.timeout(45000),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, Stage 2, open interest, news, and deals are loaded.";
+        paint(payload.market?.result, payload.results?.result, payload.brief, payload.screen, payload.optionChain);
+      } catch (error) {
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
+      }
+    }
+
+    function safeLink(url) {
+      if (typeof url !== "string") return "";
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "https:" || !parsed.hostname.endsWith("moneycontrol.com")) return "";
+        return parsed.href;
+      } catch {
+        return "";
+      }
+    }
+    function briefBlock(brief) {
+      if (!brief) return "";
+      if (brief.ok === false) {
+        return `<h2>News and deals</h2><p class="error">${escapeHtml(brief.error || "Moneycontrol did not answer.")}</p>`;
+      }
+      if (!brief.applicable) {
+        return `<h2>News and deals</h2><p>${escapeHtml(brief.reason || "Not available for this symbol.")}</p>`;
+      }
+      const articles = (brief.news || []).map((item) => {
+        const href = safeLink(item.url);
+        const title = escapeHtml(item.headline || "Untitled");
+        const label = href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${title}</a>` : title;
+        return `<li>${label}<span>${escapeHtml(item.date || "Moneycontrol")}</span></li>`;
+      }).join("");
+      const deals = (brief.bulkDeals || []).map((deal) => `
+        <tr>
+          <td>${escapeHtml(deal.date || "—")}</td>
+          <td>${escapeHtml(deal.client || "—")}</td>
+          <td>${escapeHtml(deal.side || "—")}</td>
+          <td>${num(deal.quantity, 0)}</td>
+          <td>${num(deal.price)}</td>
+          <td>${deal.percentTraded === null || deal.percentTraded === undefined ? "—" : num(deal.percentTraded)}%</td>
+        </tr>`).join("");
+      const dealTable = deals
+        ? `<table>
+             <thead><tr><th>Date</th><th>Client</th><th>Side</th><th>Quantity</th><th>Price</th><th>% of equity</th></tr></thead>
+             <tbody>${deals}</tbody>
+           </table>`
+        : `<p>Moneycontrol shows no bulk deals in ${escapeHtml(brief.bulkWindow || "the last 5 days")}.</p>`;
+      const largeRows = (brief.largeDeals || []).map((deal) => `
+        <tr>
+          <td>${escapeHtml(deal.date || "—")}</td>
+          <td>${escapeHtml(deal.time || "—")}</td>
+          <td>${escapeHtml(deal.exchange || "—")}</td>
+          <td>${num(deal.quantity, 0)}</td>
+          <td>${num(deal.price)}</td>
+          <td>${deal.valueCrore === null || deal.valueCrore === undefined ? "—" : num(deal.valueCrore, 0)}</td>
+        </tr>`).join("");
+      const largeTable = brief.largeError
+        ? `<p class="error">${escapeHtml(brief.largeError)}</p>`
+        : largeRows
+          ? `<table>
+               <thead><tr><th>Date</th><th>Time</th><th>Exchange</th><th>Quantity</th><th>Price</th><th>Value (Rs cr)</th></tr></thead>
+               <tbody>${largeRows}</tbody>
+             </table>`
+          : `<p>Moneycontrol shows no large deals in ${escapeHtml(brief.bulkWindow || "the last 5 days")}.</p>`;
+      return `
+        <h2>Latest news</h2>
+        <p class="hint">Source: Moneycontrol${brief.name ? " · " + escapeHtml(brief.name) : ""}</p>
+        ${articles ? `<ul class="news-list">${articles}</ul>` : "<p>Moneycontrol returned no headlines.</p>"}
+        <h2>Bulk deals, last 5 days</h2>
+        <p class="hint">${escapeHtml(brief.bulkNote || "")} Window: ${escapeHtml(brief.bulkWindow || "last 5 days")}. <a href="https://www.moneycontrol.com/markets/stock-deals/bulk-deals/" target="_blank" rel="noopener noreferrer">Moneycontrol bulk deals</a></p>
+        ${dealTable}
+        <h2>Large deals, last 5 days</h2>
+        <p class="hint">Big prints Moneycontrol lists on its large-deals page. Value is rupee crore, as they report it. Window: ${escapeHtml(brief.bulkWindow || "last 5 days")}. <a href="https://www.moneycontrol.com/markets/stock-deals/large-deals/" target="_blank" rel="noopener noreferrer">Moneycontrol large deals</a></p>
+        ${largeTable}`;
+    }
+    function ruleList(rules) {
+      return `<ul class="rules">${(rules || []).map((rule) => `
+        <li class="${rule.pass ? "pass" : "fail"}">
+          <b>${rule.pass ? "Pass" : "Fail"}</b>
+          <span>${escapeHtml(rule.label || "")}</span>
+          <small>${escapeHtml(rule.detail || "")}</small>
+        </li>`).join("")}</ul>`;
+    }
+    function stageBlock(screen) {
+      if (!screen) return "";
+      if (screen.ok === false) {
+        return `<h2>Stage 2 screen</h2><p class="error">${escapeHtml(screen.error || "The screen did not load.")}</p>`;
+      }
+      if (!screen.applicable) {
+        return `<h2>Stage 2 screen</h2><p>${escapeHtml(screen.reason || "Not available for this symbol.")}</p>`;
+      }
+      const tone = screen.verdict === "breakout" ? "up" : screen.verdict === "watch" ? "range" : "down";
+      return `
+        <h2>Stage 2 screen</h2>
+        <p class="bias ${tone}">${escapeHtml(screen.verdict || "")}</p>
+        <p>${escapeHtml(screen.verdictDetail || "")}</p>
+        <h2>Trend template</h2>
+        <p class="hint">${screen.template?.pass ? "All eight rules pass." : "One failed rule takes the stock out."}</p>
+        ${ruleList(screen.template?.rules)}
+        <h2>Earnings and relative strength</h2>
+        <p class="hint">${screen.fundamentals?.pass ? "Earnings growth and Nifty leadership pass." : "A miss here takes the stock out even when the template passes."}</p>
+        ${ruleList(screen.fundamentals?.rules)}
+        <h2>Entry</h2>
+        <p class="hint">A tight base is not an entry. The entry is a close through the pivot within 5 sessions on at least 1.5 times the prior 50-session volume.</p>
+        ${ruleList(screen.entry?.rules)}
+        <p class="hint">${escapeHtml(screen.note || "")}</p>`;
+    }
+    function oiBlock(chain) {
+      if (!chain) return "";
+      if (chain.ok === false) {
+        return `<h2>Open interest</h2><p class="error">${escapeHtml(chain.error || "The option chain did not load.")}</p>`;
+      }
+      if (!chain.applicable) {
+        return `<h2>Open interest</h2><p>${escapeHtml(chain.reason || "No option chain for this symbol.")}</p>`;
+      }
+      const rows = (chain.strikes || []).map((row) => {
+        const marks = [];
+        if (row.strike === chain.maxPutStrike) marks.push("Highest put OI");
+        if (row.strike === chain.maxCallStrike) marks.push("Highest call OI");
+        return `
+        <tr class="${row.atTheMoney ? "atm" : ""}">
+          <td>${num(row.callOi, 0)}</td>
+          <td class="${changeClass(row.callChange)}">${signed(row.callChange, 0)}</td>
+          <td>${row.callIv ? num(row.callIv, 1) : "—"}</td>
+          <td><b>${num(row.strike, 0)}</b>${marks.length ? `<div class="hint">${marks.join(" · ")}</div>` : ""}</td>
+          <td>${row.putIv ? num(row.putIv, 1) : "—"}</td>
+          <td class="${changeClass(row.putChange)}">${signed(row.putChange, 0)}</td>
+          <td>${num(row.putOi, 0)}</td>
+        </tr>`;
+      }).join("");
+      const callStrike = chain.maxCallStrike;
+      const putStrike = chain.maxPutStrike;
+      const hasRange = typeof callStrike === "number" && typeof putStrike === "number";
+      const low = hasRange ? Math.min(callStrike, putStrike) : null;
+      const high = hasRange ? Math.max(callStrike, putStrike) : null;
+      const spot = chain.underlying;
+      let place = "The two strikes are the open-interest range for this expiry.";
+      if (hasRange && typeof spot === "number") {
+        if (spot < low) place = `Underlying ${num(spot)} is below ${num(low, 0)}–${num(high, 0)}.`;
+        else if (spot > high) place = `Underlying ${num(spot)} is above ${num(low, 0)}–${num(high, 0)}.`;
+        else place = `Underlying ${num(spot)} sits inside ${num(low, 0)}–${num(high, 0)}.`;
+      }
+      const rangeBlock = `
+        <div class="metrics three">
+          <div class="metric"><span>Highest put OI</span><b>${num(putStrike, 0)}</b><span>${num(chain.maxPutOi, 0)} contracts</span></div>
+          <div class="metric"><span>Highest call OI</span><b>${num(callStrike, 0)}</b><span>${num(chain.maxCallOi, 0)} contracts</span></div>
+          <div class="metric"><span>OI strike range</span><b>${hasRange ? `${num(low, 0)}–${num(high, 0)}` : "—"}</b></div>
+        </div>
+        <p class="hint">${place} Highest put OI is the strike with the most put contracts. Highest call OI is the strike with the most call contracts.</p>`;
+      return `
+        <h2>Open interest</h2>
+        <p>${escapeHtml(chain.biasDetail || "")}</p>
+        <p class="hint">${escapeHtml(chain.nseSymbol || "")} · expiry ${escapeHtml(chain.expiry || "—")} · as of ${escapeHtml(chain.asOf || "time unavailable")} · underlying ${num(chain.underlying)} · <a href="https://www.nseindia.in/option-chain" target="_blank" rel="noopener noreferrer">NSE option chain</a></p>
+        <div class="metrics">
+          <div class="metric"><span>Call OI</span><b>${num(chain.callOi, 0)}</b></div>
+          <div class="metric"><span>Put OI</span><b>${num(chain.putOi, 0)}</b></div>
+          <div class="metric"><span>Put-call ratio</span><b>${num(chain.pcr)}</b></div>
+          <div class="metric"><span>OI change, call / put</span><b class="${changeClass(chain.callChange)}">${signed(chain.callChange, 0)}</b> <b class="${changeClass(chain.putChange)}">${signed(chain.putChange, 0)}</b></div>
+        </div>
+        ${rangeBlock}
+        <p class="hint">Contracts for the nearest expiry. The highlighted strike is nearest the underlying.</p>
+        <table>
+          <thead><tr><th>Call OI</th><th>Call change</th><th>Call IV</th><th>Strike</th><th>Put IV</th><th>Put change</th><th>Put OI</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p class="hint">${escapeHtml(chain.note || "")}</p>`;
+    }
+    function todayPriceStatus(change) {
+      if (typeof change !== "number" || !Number.isFinite(change) || change === 0) {
+        return { tone: "range", word: "Flat" };
+      }
+      return change > 0 ? { tone: "up", word: "Up" } : { tone: "down", word: "Down" };
+    }
+    function oiStatus(chain) {
+      if (!chain || chain.ok === false) return { tone: "range", word: "Unavailable" };
+      if (!chain.applicable) return { tone: "range", word: "None" };
+      if (chain.bias === "buy") return { tone: "up", word: "Buy" };
+      if (chain.bias === "sell") return { tone: "down", word: "Sell" };
+      return { tone: "range", word: "Neutral" };
+    }
+    function dayLevelsBlock(levels) {
+      if (!levels) {
+        return `<h2>Day levels</h2><p>A prior completed session is required for the day pivot.</p>`;
+      }
+      const near = (level) => {
+        if (levels.nearestSupport && level.name === levels.nearestSupport.name && level.price === levels.nearestSupport.price) return "support";
+        if (levels.nearestResistance && level.name === levels.nearestResistance.name && level.price === levels.nearestResistance.price) return "resistance";
+        return "";
+      };
+      const rows = (levels.levels || []).map((level) => `
+        <tr class="${near(level)}">
+          <td>${escapeHtml(level.name)}</td>
+          <td>${num(level.price)}</td>
+          <td>${level.side === "support" ? "Below price" : level.side === "resistance" ? "Above price" : "At price"}</td>
+        </tr>`).join("");
+      return `
+        <h2>Day levels</h2>
+        <p class="hint">Previous session ${escapeHtml(levels.sessionDate || "date unavailable")}. Pivot is (high + low + close) / 3. Resistance 1 is 2 × pivot − low. Support 1 is 2 × pivot − high.</p>
+        <div class="metrics">
+          <div class="metric"><span>Nearest support</span><b>${levels.nearestSupport ? num(levels.nearestSupport.price) : "—"}</b><span>${escapeHtml(levels.nearestSupport?.name || "None below the price")}</span></div>
+          <div class="metric"><span>Nearest resistance</span><b>${levels.nearestResistance ? num(levels.nearestResistance.price) : "—"}</b><span>${escapeHtml(levels.nearestResistance?.name || "None above the price")}</span></div>
+          <div class="metric"><span>Pivot</span><b>${num(levels.pivot)}</b></div>
+          <div class="metric"><span>Prior high / low</span><b>${num(levels.previousLow)}–${num(levels.previousHigh)}</b></div>
+        </div>
+        <table>
+          <thead><tr><th>Level</th><th>Price</th><th>Versus price</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p class="hint">${escapeHtml(levels.note || "")}</p>`;
+    }
+    function paint(market, results, brief, screen, optionChain) {
+      if (!market || market.ok === false) {
+        board.innerHTML = `<p class="error">${escapeHtml(market?.error || "No technicals.")}</p>`;
+        return;
+      }
+      const change = market.dayChangePercent;
+      const low = market.fiftyTwoWeekLow;
+      const high = market.fiftyTwoWeekHigh;
+      const span = high !== null && low !== null ? high - low : 0;
+      const pos = (value) => (span > 0 && value !== null ? Math.min(100, Math.max(0, ((value - low) / span) * 100)) : null);
+      const pricePos = pos(market.price);
+      const sma20Pos = pos(market.sma20);
+      const sma50Pos = pos(market.sma50);
+      const history = results && results.applicable ? results.history || [] : [];
+      const rows = history.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.quarter || "—")}</td>
+          <td>${num(row.epsActual)}</td>
+          <td>${num(row.epsEstimate)}</td>
+          <td class="${changeClass(row.surprisePercent)}">${signed(row.surprisePercent)}%</td>
+        </tr>`).join("");
+      const resultsBlock = !results
+        ? ""
+        : results.ok === false
+          ? `<h2>Published results</h2><p class="error">${escapeHtml(results.error)}</p>`
+          : results.applicable
+            ? `<h2>Published results</h2>
+               <p class="hint">Most recent quarter ${escapeHtml(results.mostRecentQuarter || "—")} · trailing EPS ${num(results.trailingEps)} · forward P/E ${num(results.forwardPe)} · quarterly earnings growth ${signed(results.quarterlyEarningsGrowthPercent)}%</p>
+               <table>
+                 <thead><tr><th>Quarter</th><th>EPS actual</th><th>Estimate</th><th>Surprise</th></tr></thead>
+                 <tbody>${rows || "<tr><td colspan='4'>No quarterly history in this feed.</td></tr>"}</tbody>
+               </table>
+               <p>Next earnings ${escapeHtml(results.nextEarnings?.date || "—")}${results.nextEarnings?.isEstimate ? " (estimated date)" : ""}. Current-quarter EPS estimate ${num(results.currentQuarter?.epsEstimate)}.</p>
+               <p class="hint">Analyst figures are third-party estimates, not NSE filings. Surprise is the percent gap versus the estimate.</p>`
+            : `<h2>Published results</h2><p>${escapeHtml(results.reason || "Company results do not apply.")}</p>`;
+      const marks = [
+        sma20Pos === null ? "" : `<span class="mark sma" style="left:${sma20Pos}%" title="SMA20"></span>`,
+        sma50Pos === null ? "" : `<span class="mark sma" style="left:${sma50Pos}%" title="SMA50"></span>`,
+        pricePos === null ? "" : `<span class="dot" style="left:${pricePos}%" title="Last price"></span>`,
+      ].join("");
+      const today = todayPriceStatus(change);
+      const oi = oiStatus(optionChain);
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">${escapeHtml(market.name || market.symbol)}</h2>
+            <p class="sub">${escapeHtml(market.yahooSymbol)} · ${escapeHtml(market.asOf || "time unavailable")} · ${escapeHtml(market.currency || "")}</p>
+          </div>
+          <div class="statuses">
+            <div class="status-card">
+              <span class="status-label">Trend Status</span>
+              <div class="bias ${escapeHtml(market.trend)}">${escapeHtml(market.trend)}</div>
+            </div>
+            <div class="status-card">
+              <span class="status-label">Today Price Status</span>
+              <div class="bias ${today.tone}">${today.word}</div>
+            </div>
+            <div class="status-card">
+              <span class="status-label">OI Status</span>
+              <div class="bias ${oi.tone}">${oi.word}</div>
+            </div>
+          </div>
+        </div>
+        <p class="price">${num(market.price)} <span class="${changeClass(change)}">${signed(change)}% today</span></p>
+        <p class="sub">${escapeHtml(market.trendDetail || "")}</p>
+        ${market.corporateAction ? `<p class="banner">${escapeHtml(market.corporateAction)}</p>` : ""}
+        ${dayLevelsBlock(market.dayLevels)}
+        <div class="metrics">
+          <div class="metric"><span>SMA 20</span><b>${num(market.sma20)}</b></div>
+          <div class="metric"><span>SMA 50</span><b>${num(market.sma50)}</b></div>
+          <div class="metric"><span>RSI 14</span><b>${num(market.rsi14, 1)}</b></div>
+          <div class="metric"><span>21-session return</span><b>${signed(market.return21d)}%</b></div>
+          <div class="metric"><span>5-session return</span><b>${signed(market.return5d)}%</b></div>
+          <div class="metric"><span>63-session return</span><b>${signed(market.return63d)}%</b></div>
+          <div class="metric"><span>20-session vol</span><b>${num(market.realizedVol20d, 1)}%</b></div>
+          <div class="metric"><span>Day range</span><b>${num(market.dayLow)}–${num(market.dayHigh)}</b></div>
+        </div>
+        <div class="track-wrap">
+          <div class="track">${marks}</div>
+          <div class="scale"><span>52-week low ${num(low)}</span><span>20 sessions ${num(market.range20?.low)}–${num(market.range20?.high)}</span><span>52-week high ${num(high)}</span></div>
+        </div>
+        ${stageBlock(screen)}
+        ${oiBlock(optionChain)}
+        ${resultsBlock}
+        ${briefBlock(brief)}
+        <h2>Agent note</h2>
+        <div class="note" id="note"><p class="hint">Use “Write the note” to ask the agent. The figures above already come from its tools.</p></div>
+        <p class="gap">Outside this feed: ${(market.coverage?.notIncluded || []).map(escapeHtml).join(", ")}. ${escapeHtml(market.coverage?.priceDelay || "")} This is research context, not investment advice or a trade recommendation.</p>
+      `;
+    }
+
+    async function askAgent() {
+      const symbol = symbolInput.value.trim() || "the selected underlying";
+      const custom = document.querySelector("#question").value.trim();
+      const message = custom || `Write an NSE F&O research note for ${symbol}. Cover published results, technical analysis, and the overall trend.`;
+      const note = document.querySelector("#note");
+      const button = document.querySelector("#ask");
+      button.disabled = true;
+      if (note) note.innerHTML = "<p class='hint'>The agent is writing…</p>";
+      try {
+        const response = await fetch("/api/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            message,
+            sessionId: session?.sessionId,
+            continuationToken: session?.continuationToken,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) {
+          throw new Error(payload.message || payload.error || "The agent did not start a session.");
+        }
+        session = {
+          sessionId: payload.sessionId || session?.sessionId,
+          continuationToken: payload.continuationToken || session?.continuationToken,
+        };
+        await readStream(session.sessionId);
+      } catch (error) {
+        if (note) note.innerHTML = `<p class="error">${escapeHtml(error.message || "The request failed.")}</p>`;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function readStream(sessionId) {
+      if (streamAbort) streamAbort.abort();
+      streamAbort = new AbortController();
+      const note = document.querySelector("#note");
+      const response = await fetch(`/api/stream?sessionId=${encodeURIComponent(sessionId)}&startIndex=0`, {
+        signal: streamAbort.signal,
+      });
+      if (!response.ok || !response.body) {
+        throw new Error("The agent stream did not open.");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let text = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event;
+          try { event = JSON.parse(line); } catch { continue; }
+          if (event.type === "message.appended" || event.type === "message.completed") {
+            text = event.data?.text || text;
+            if (note) note.innerHTML = renderNote(text);
+          }
+          if (event.type === "actions.requested" && note && !text) {
+            const names = (event.data?.calls || []).map((call) => call.name || call.toolName).filter(Boolean);
+            if (names.length) note.innerHTML = `<p class="hint">Calling ${escapeHtml(names.join(", "))}…</p>`;
+          }
+          if (event.type === "turn.failed" || event.type === "session.failed") {
+            const message = event.data?.message || "The turn failed.";
+            if (note) note.innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+            return;
+          }
+          if (event.type === "turn.completed") return;
+        }
+      }
+    }
+
+    fetch("/api/health").then((response) => response.json()).then(() => {
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading figures…";
+    }).catch(() => {
+      statusEl.textContent = "Desk status unavailable. Stop the window with Ctrl+C and run npm run desk again.";
+    });
+    document.querySelector("#home").addEventListener("click", () => loadScan(false));
+    document.querySelector("#morning").addEventListener("click", () => loadMorning(false));
+    document.querySelector("#premarket").addEventListener("click", () => loadPremarket(false));
+    loadScan(false);
+  </script>
+</body>
+</html>
