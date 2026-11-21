@@ -18,7 +18,7 @@ Supported index names: `NIFTY`, `BANKNIFTY`, `FINNIFTY`, `MIDCPNIFTY`, `INDIAVIX
 2. Run `npm run desk`.
 3. Open http://127.0.0.1:4173.
 4. Load a symbol. The board shows the quote, a Stage 2 screen, NSE open interest, results, Moneycontrol headlines, bulk deals, and large deals from the last 5 days.
-5. Choose **Premarket** for the top 4 buys and top 4 sells. A buy has today's bid and ask above the previous close, with more shares on the bid. A sell has both below that close, with more shares on the ask. The desk runs that scan at 09:10 IST on weekdays. **F&O scan** is the open-interest list.
+5. Choose **Morning** for the 08:45 IST weekday brief. It ranks up to three F&O names in each sector from the previous session, with the last three daily moves, NSE bulk and block deals, and headlines from Economic Times, Moneycontrol, Business Standard, and Mint. **Premarket** is the 09:10 IST auction. A buy there has today's bid and ask above the previous close, with more shares on the bid. A sell has both below that close, with more shares on the ask. **F&O scan** is the open-interest list.
 6. Choose **Write the note** for the agent's written research. That step needs `npx --yes "@grok/agent-sdk@0.6.0" login`.
 
 Stop an old desk with Ctrl+C before you start it again. `npm run desk` must run inside this folder, not in your home directory.

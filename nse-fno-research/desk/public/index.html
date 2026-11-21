@@ -45,14 +45,16 @@
       display: grid;
       grid-template-columns: 300px 1fr;
       min-height: calc(100vh - 92px);
+      min-width: 0;
     }
     aside {
       border-right: 1px solid var(--line);
       padding: 20px;
+      min-width: 0;
     }
-    section.board { padding: 20px 28px 40px; }
+    section.board { padding: 20px 28px 40px; min-width: 0; }
     label { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-    .row { display: flex; gap: 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
     input[type="text"], textarea {
       width: 100%;
       background: var(--panel);
@@ -134,7 +136,7 @@
     .scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
     .banner { margin-top: 14px; padding: 8px 10px; background: var(--range-bg); border: 1px solid var(--line); }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
-    .table-wrap { overflow-x: auto; }
+    .table-wrap { overflow-x: auto; max-width: 100%; }
     .table-wrap table { min-width: 760px; }
     th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); }
     th:first-child, td:first-child { text-align: left; }
@@ -187,6 +189,7 @@
       </form>
       <div class="row" style="margin-top: 10px;">
         <button type="button" class="secondary" id="home">F&amp;O scan</button>
+        <button type="button" class="secondary" id="morning">Morning</button>
         <button type="button" class="secondary" id="premarket">Premarket</button>
       </div>
       <div class="chips" id="chips"></div>
@@ -301,6 +304,7 @@
       board.querySelector("#refresh-scan")?.addEventListener("click", () => loadScan(true));
       wireSymbols();
     }
+    let morningPayload = null;
     let premarketPayload = null;
     let viewToken = 0;
     function premarketTable(title, rows) {
@@ -359,6 +363,93 @@
         ${premarketTable("Top 4 sell", scan.sells)}`;
       board.querySelector("#refresh-premarket")?.addEventListener("click", () => loadPremarket(true));
       wireSymbols();
+    }
+    function sessionText(sessions) {
+      return (sessions || []).map((value) => `${signed(value)}%`).join(", ") || "—";
+    }
+    function morningRows(rows) {
+      const body = (rows || []).map((row) => `
+        <tr>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button><div class="hint">${escapeHtml(row.sector ? `${row.sector} · ` : "")}${escapeHtml(row.name || "")}</div></td>
+          <td>${sessionText(row.sessions)}</td>
+          <td>${num(row.close)}</td>
+          <td class="${changeClass(row.changePercent)}">${signed(row.changePercent)}%</td>
+          <td>${escapeHtml(row.deal || "—")}</td>
+          <td class="${row.action === "Buy watch" ? "up" : row.action === "Sell watch" ? "down" : ""}"><b>${escapeHtml(row.action || "")}</b><div class="hint">${escapeHtml(row.reason || "")}${row.headline ? ` ${escapeHtml(row.headline)}` : ""}</div></td>
+        </tr>`).join("");
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>Last 3 sessions</th><th>Close</th><th>Last session</th><th>Bulk or block</th><th>Action</th></tr></thead>
+            <tbody>${body || "<tr><td colspan='6'>None.</td></tr>"}</tbody>
+          </table>
+        </div>`;
+    }
+    function paintMorning(report) {
+      morningPayload = report;
+      if (!report.ready) {
+        board.innerHTML = `
+          <div class="head">
+            <div>
+              <h2 class="name">Morning brief</h2>
+              <p class="sub">Next run ${escapeHtml(report.nextRunLabel || "08:45 IST")}</p>
+            </div>
+            <button type="button" class="secondary" id="refresh-morning">Run now</button>
+          </div>
+          <p class="hint">${escapeHtml(report.note || "The morning brief runs at 08:45 IST on weekdays.")}</p>`;
+        board.querySelector("#refresh-morning")?.addEventListener("click", () => loadMorning(true));
+        return;
+      }
+      const globals = (report.globals || []).map((item) => `<div class="metric"><span>${escapeHtml(item.label)}</span><b class="${changeClass(item.changePercent)}">${signed(item.changePercent)}%</b></div>`).join("");
+      const themes = (report.themes || []).map((line) => `<p>${escapeHtml(line)}</p>`).join("");
+      const headlines = (report.headlines || []).map((item) => `<li><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a><span>${escapeHtml(item.source)}</span></li>`).join("");
+      const sectors = (report.sectors || []).map((sector) => `
+        <h2>${escapeHtml(sector.sector)} <span class="hint">${signed(sector.median)}% median · ${num(sector.count, 0)} names</span></h2>
+        ${morningRows(sector.rows)}`).join("");
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">Morning brief</h2>
+            <p class="sub">${escapeHtml(report.briefingLabel || "—")} · session ${escapeHtml(report.marketLabel || "—")} · ${num(report.advances, 0)} up · ${num(report.declines, 0)} down</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-morning">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(report.note || "")} Next scheduled run ${escapeHtml(report.nextRunLabel || "08:45 IST")}.</p>
+        <div class="metrics">${globals}</div>
+        ${themes}
+        <p class="hint">${(report.deals || []).length
+          ? `${num((report.deals || []).length, 0)} F&O bulk or block rows in the NSE file${report.dealAsOf ? ` dated ${escapeHtml(report.dealAsOf)}` : ""}.`
+          : `The NSE bulk and block file${report.dealAsOf ? ` dated ${escapeHtml(report.dealAsOf)}` : ""} had no F&O name. Intraday prints below that disclosure are not in this brief.`}</p>
+        <h2>Potential actions</h2>
+        ${morningRows(report.lead)}
+        <h2>Newsletter headlines</h2>
+        <ul class="news-list">${headlines || "<li>No headlines returned.</li>"}</ul>
+        ${sectors}`;
+      board.querySelector("#refresh-morning")?.addEventListener("click", () => loadMorning(true));
+      wireSymbols();
+    }
+    async function loadMorning(fresh) {
+      const token = ++viewToken;
+      if (!fresh && morningPayload) {
+        paintMorning(morningPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Building the 08:45 brief from the previous session, the wires, and the deal file…</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the morning brief…";
+      try {
+        const response = await fetch(fresh ? "/api/morning?fresh=1" : "/api/morning", { signal: AbortSignal.timeout(90000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The morning brief did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Morning brief is loaded. Open a name for the full board.";
+        paintMorning(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The morning brief did not answer in time." : (error.message || "The morning brief did not answer."))}</p>`;
+      }
     }
     async function loadPremarket(fresh) {
       const token = ++viewToken;
@@ -805,6 +896,7 @@
       statusEl.textContent = "Desk status unavailable. Stop the window with Ctrl+C and run npm run desk again.";
     });
     document.querySelector("#home").addEventListener("click", () => loadScan(false));
+    document.querySelector("#morning").addEventListener("click", () => loadMorning(false));
     document.querySelector("#premarket").addEventListener("click", () => loadPremarket(false));
     loadScan(false);
   </script>

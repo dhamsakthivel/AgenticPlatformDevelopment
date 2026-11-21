@@ -193,6 +193,27 @@ const server = createServer(async (req, res) => {
       sendJson(res, scan.ok === false ? 502 : 200, scan);
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/morning") {
+      const morning = await loadModule("bot/lib/morning.ts");
+      const nextRunLabel = morning.morningLabel(morning.nextMorningAt(new Date()));
+      if (url.searchParams.get("fresh") === "1") {
+        const report = await runMorning();
+        sendJson(res, report.ok === false ? 502 : 200, { ...report, nextRunLabel });
+        return;
+      }
+      const saved = readMorning();
+      if (!saved) {
+        sendJson(res, 200, {
+          ok: true,
+          ready: false,
+          nextRunLabel,
+          note: "The morning brief runs at 08:45 IST on weekdays, before the pre-open. It stays on this desk after that.",
+        });
+        return;
+      }
+      sendJson(res, 200, { ...saved, nextRunLabel });
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/preopen") {
       const preopen = await loadModule("bot/lib/preopen.ts");
       const nextRunLabel = preopen.premarketLabel(preopen.nextPremarketAt(new Date()));
@@ -374,6 +395,75 @@ async function startPremarket() {
   armPremarket(preopen);
 }
 
+const morningFile = path.join(here, ".cache", "morning-latest.json");
+let morningRun = null;
+
+function readMorning() {
+  try {
+    return JSON.parse(readFileSync(morningFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeMorning(body) {
+  mkdirSync(path.dirname(morningFile), { recursive: true });
+  writeFileSync(morningFile, JSON.stringify(body));
+}
+
+async function runMorning() {
+  if (morningRun) return morningRun;
+  morningRun = (async () => {
+    const morning = await loadModule("bot/lib/morning.ts");
+    const report = await morning.morningReport();
+    if (report.ok) writeMorning({ ...report, savedAt: new Date().toISOString() });
+    return report;
+  })().finally(() => {
+    morningRun = null;
+  });
+  return morningRun;
+}
+
+function morningStale(morning, saved, now = new Date()) {
+  if (!saved || saved.ruleVersion !== morning.MORNING_RULE) return true;
+  if (saved.briefingKey !== morning.briefingKey(now)) return true;
+  const slot = morning.briefingSlot(now).getTime();
+  return now.getTime() >= slot && Date.parse(saved.builtAt) < slot;
+}
+
+function armMorning(morning) {
+  const next = morning.nextMorningAt(new Date());
+  const wait = Math.max(1000, next.getTime() - Date.now());
+  console.log(`Morning brief  ${morning.morningLabel(next)}`);
+  setTimeout(() => {
+    runMorning()
+      .then((report) => {
+        if (report.ok) console.log(`Morning brief saved  ${report.briefingLabel}`);
+        else console.log(`Morning brief failed. ${report.error}`);
+      })
+      .catch((error) => {
+        console.log(`Morning brief failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      })
+      .finally(() => armMorning(morning));
+  }, wait);
+}
+
+async function startMorning() {
+  const morning = await loadModule("bot/lib/morning.ts");
+  const saved = readMorning();
+  if (morningStale(morning, saved)) {
+    runMorning()
+      .then((report) => {
+        if (report.ok) console.log(`Morning brief saved  ${report.briefingLabel}`);
+        else console.log(`Morning brief failed. ${report.error}`);
+      })
+      .catch((error) => {
+        console.log(`Morning brief failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      });
+  }
+  armMorning(morning);
+}
+
 function stopAgent() {
   if (agentChild && !agentChild.killed) agentChild.kill("SIGTERM");
 }
@@ -392,5 +482,8 @@ server.listen(deskPort, "127.0.0.1", () => {
   console.log(`Agent         ${agentUrl}`);
   startPremarket().catch((error) => {
     console.log(`Premarket schedule failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+  startMorning().catch((error) => {
+    console.log(`Morning schedule failed. ${error instanceof Error ? error.message : "Unknown error"}`);
   });
 });
