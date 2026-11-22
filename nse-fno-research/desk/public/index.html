@@ -188,6 +188,7 @@
         </div>
       </form>
       <div class="row" style="margin-top: 10px;">
+        <button type="button" class="secondary" id="gate">Research gate</button>
         <button type="button" class="secondary" id="home">F&amp;O scan</button>
         <button type="button" class="secondary" id="morning">Morning</button>
         <button type="button" class="secondary" id="direction">Direction</button>
@@ -205,7 +206,7 @@
       </form>
     </aside>
     <section class="board" id="board" aria-live="polite">
-      <p class="hint">Scanning F&amp;O open interest…</p>
+      <p class="hint">Loading the research gate…</p>
     </section>
   </main>
   <script>
@@ -476,12 +477,67 @@
           </table>
         </div>`;
     }
-    function paintDirection(report) {
-      directionPayload = report;
-      const labels = (report.sessions || []).map((key) => {
+    function sessionLabels(report) {
+      return (report.sessions || []).map((key) => {
         const [year, month, day] = key.split("-");
         return `${Number(day)} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(month) - 1]} ${year}`;
       });
+    }
+    function gateOf(report) {
+      if (report.gate?.shorts && report.gate?.longs) return report.gate;
+      return {
+        shorts: (report.shorts || []).filter((row) => row.shortDays >= 2).slice(0, 3),
+        longs: (report.longs || []).filter((row) => row.longDays >= 2).slice(0, 3),
+      };
+    }
+    function paintGate(report) {
+      directionPayload = report;
+      const gate = gateOf(report);
+      const labels = sessionLabels(report);
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">Research gate</h2>
+            <p class="sub">${escapeHtml(labels.join(" · ") || "Last three sessions")} · top 3 new shorts · top 3 new longs</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-gate">Refresh</button>
+        </div>
+        <p class="hint">The gate keeps the three names with new shorts on at least two of the last three sessions, and the three with new longs on at least two. A name with more of those sessions ranks first. The percent beside the close is versus the previous session. These labels are a research brief, not an order.</p>
+        <h2>Top 3 new shorts</h2>
+        ${directionRows(gate.shorts)}
+        <h2>Top 3 new longs</h2>
+        ${directionRows(gate.longs)}
+        <p class="hint" style="margin-top: 16px;"><button type="button" class="secondary" id="open-direction">Full direction</button></p>`;
+      board.querySelector("#refresh-gate")?.addEventListener("click", () => loadGate(true));
+      board.querySelector("#open-direction")?.addEventListener("click", () => loadDirection(false));
+      wireSymbols();
+    }
+    async function loadGate(fresh) {
+      const token = ++viewToken;
+      if (!fresh && directionPayload?.shorts) {
+        paintGate(directionPayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Reading the last three futures sessions for the research gate…</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the research gate…";
+      try {
+        const response = await fetch(fresh ? "/api/direction?fresh=1" : "/api/direction", { signal: AbortSignal.timeout(90000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The research gate did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />Research gate is loaded. Open a name for the full board.";
+        paintGate(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The research gate did not answer in time." : (error.message || "The research gate did not answer."))}</p>`;
+      }
+    }
+    function paintDirection(report) {
+      directionPayload = report;
+      const labels = sessionLabels(report);
       board.innerHTML = `
         <div class="head">
           <div>
@@ -965,11 +1021,12 @@
     }).catch(() => {
       statusEl.textContent = "Desk status unavailable. Stop the window with Ctrl+C and run npm run desk again.";
     });
+    document.querySelector("#gate").addEventListener("click", () => loadGate(false));
     document.querySelector("#home").addEventListener("click", () => loadScan(false));
     document.querySelector("#morning").addEventListener("click", () => loadMorning(false));
     document.querySelector("#direction").addEventListener("click", () => loadDirection(false));
     document.querySelector("#premarket").addEventListener("click", () => loadPremarket(false));
-    loadScan(false);
+    loadGate(false);
   </script>
 </body>
 </html>
