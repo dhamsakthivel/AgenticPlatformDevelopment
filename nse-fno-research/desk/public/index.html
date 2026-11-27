@@ -492,46 +492,110 @@
         longs: (report.longs || []).filter((row) => row.longDays >= 2).slice(0, 3),
       };
     }
-    function paintGate(report) {
+    function yearExtremes(rangeReport, directionReport) {
+      const latest = new Map((directionReport?.book || []).map((row) => [row.symbol, row]));
+      const joined = [];
+      for (const row of rangeReport?.rows || []) {
+        const futures = latest.get(row.symbol);
+        if (!futures || !futures.priceChange) continue;
+        joined.push({ ...row, futures });
+      }
+      const up = (row) => row.futures.priceChange >= 0.3;
+      const down = (row) => row.futures.priceChange <= -0.3;
+      const nearHigh = (a, b) => b.fromHigh - a.fromHigh;
+      const nearLow = (a, b) => a.fromLow - b.fromLow;
+      return {
+        highUp: joined.filter(up).sort(nearHigh).slice(0, 5),
+        highDown: joined.filter(down).sort(nearHigh).slice(0, 5),
+        lowUp: joined.filter(up).sort(nearLow).slice(0, 5),
+        lowDown: joined.filter(down).sort(nearLow).slice(0, 5),
+      };
+    }
+    function extremeTable(title, rows, edge) {
+      const levelName = edge === "high" ? "52-week high" : "52-week low";
+      const body = (rows || []).map((row) => {
+        const level = edge === "high" ? row.high : row.low;
+        const gap = edge === "high" ? row.fromHigh : row.fromLow;
+        const side = row.futures.priceChange >= 0.3 ? "Up" : "Down";
+        const tone = side === "Up" ? "up" : "down";
+        return `
+          <tr>
+            <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button><div class="hint">${escapeHtml(row.sector || "")} · ${escapeHtml(row.name || "")}</div></td>
+            <td>${num(row.price)}</td>
+            <td>${num(level)}</td>
+            <td class="${changeClass(gap)}">${signed(gap)}%</td>
+            <td class="${tone}"><b>${side}</b><div class="hint">${signed(row.futures.priceChange)}% vs prior<br />OI ${signed(row.futures.oiChangePercent)}%</div></td>
+            <td class="${tone}">${escapeHtml(row.futures.reading || "")}</td>
+          </tr>`;
+      }).join("");
+      return `
+        <h2>${escapeHtml(title)}</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>Last</th><th>${levelName}</th><th>Versus level</th><th>Futures</th><th>Reading</th></tr></thead>
+            <tbody>${body || "<tr><td colspan='6'>None in this category.</td></tr>"}</tbody>
+          </table>
+        </div>`;
+    }
+    function extremeBlocks(rangeReport, directionReport) {
+      if (!rangeReport?.rows || !directionReport?.book) return "";
+      const lists = yearExtremes(rangeReport, directionReport);
+      const sessionKey = (directionReport.sessions || [])[directionReport.sessions.length - 1] || "";
+      const session = sessionKey ? sessionLabels({ sessions: [sessionKey] })[0] : "";
+      return `
+        <p class="hint">Top 5 closest to the 52-week high with the last futures session up, and top 5 with that session down. The same split for the 52-week low. Futures up is a higher close${session ? ` on ${escapeHtml(session)}` : ""}. Futures down is a lower close. The reading pairs that close with the open-interest change. These labels are a research brief, not an order.</p>
+        ${extremeTable("52-week high, futures up", lists.highUp, "high")}
+        ${extremeTable("52-week high, futures down", lists.highDown, "high")}
+        ${extremeTable("52-week low, futures up", lists.lowUp, "low")}
+        ${extremeTable("52-week low, futures down", lists.lowDown, "low")}`;
+    }
+    function paintGate(report, rangeReport) {
       directionPayload = report;
+      if (rangeReport) rangePayload = rangeReport;
       const gate = gateOf(report);
       const labels = sessionLabels(report);
       board.innerHTML = `
         <div class="head">
           <div>
             <h2 class="name">Research gate</h2>
-            <p class="sub">${escapeHtml(labels.join(" · ") || "Last three sessions")} · top 3 new shorts · top 3 new longs</p>
+            <p class="sub">${escapeHtml(labels.join(" · ") || "Last three sessions")} · top 5 at the 52-week high and low · top 3 new shorts · top 3 new longs</p>
           </div>
           <button type="button" class="secondary" id="refresh-gate">Refresh</button>
         </div>
-        <p class="hint">The gate keeps the three names with new shorts on at least two of the last three sessions, and the three with new longs on at least two. A name with more of those sessions ranks first. The percent beside the close is versus the previous session. These labels are a research brief, not an order.</p>
+        ${extremeBlocks(rangeReport, report)}
         <h2>Top 3 new shorts</h2>
+        <p class="hint">A name needs new shorts on at least two of the last three sessions. More of those sessions ranks first.</p>
         ${directionRows(gate.shorts)}
         <h2>Top 3 new longs</h2>
         ${directionRows(gate.longs)}
-        <p class="hint" style="margin-top: 16px;"><button type="button" class="secondary" id="open-direction">Full direction</button></p>`;
+        <p class="hint" style="margin-top: 16px;"><button type="button" class="secondary" id="open-direction">Full direction</button> <button type="button" class="secondary" id="open-range">Full 52-week book</button></p>`;
       board.querySelector("#refresh-gate")?.addEventListener("click", () => loadGate(true));
       board.querySelector("#open-direction")?.addEventListener("click", () => loadDirection(false));
+      board.querySelector("#open-range")?.addEventListener("click", () => loadRange(false));
       wireSymbols();
+    }
+    async function loadJson(path, fresh) {
+      const response = await fetch(fresh ? `${path}?fresh=1` : path, { signal: AbortSignal.timeout(90000) });
+      const payload = await response.json();
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || "The desk did not load.");
+      return payload;
     }
     async function loadGate(fresh) {
       const token = ++viewToken;
-      if (!fresh && directionPayload?.shorts) {
-        paintGate(directionPayload);
+      if (!fresh && directionPayload?.book && rangePayload?.rows) {
+        paintGate(directionPayload, rangePayload);
         return;
       }
-      board.innerHTML = `<p class="hint">Reading the last three futures sessions for the research gate…</p>`;
+      board.innerHTML = `<p class="hint">Reading the 52-week extremes and the last futures session…</p>`;
       statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the research gate…";
       try {
-        const response = await fetch(fresh ? "/api/direction?fresh=1" : "/api/direction", { signal: AbortSignal.timeout(90000) });
-        const payload = await response.json();
+        const [directionResult, rangeResult] = await Promise.all([
+          loadJson("/api/direction", fresh),
+          loadJson("/api/range", fresh),
+        ]);
         if (token !== viewToken) return;
-        if (!response.ok || payload.ok === false) {
-          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The research gate did not load.")}</p>`;
-          return;
-        }
         statusEl.innerHTML = "<strong>Desk ready</strong><br />Research gate is loaded. Open a name for the full board.";
-        paintGate(payload);
+        paintGate(directionResult, rangeResult);
       } catch (error) {
         if (token !== viewToken) return;
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The research gate did not answer in time." : (error.message || "The research gate did not answer."))}</p>`;
@@ -603,6 +667,8 @@
           <button type="button" class="secondary" id="refresh-range">Refresh</button>
         </div>
         <p class="hint">${escapeHtml(report.note || "")}</p>
+        ${extremeBlocks(report, directionPayload)}
+        <h2>All F&amp;O names</h2>
         <div class="row" style="margin-top: 12px;">
           <input id="range-find" type="text" placeholder="Find a name" autocomplete="off" maxlength="32" />
         </div>
@@ -625,20 +691,19 @@
     }
     async function loadRange(fresh) {
       const token = ++viewToken;
-      if (!fresh && rangePayload?.rows) {
+      if (!fresh && rangePayload?.rows && directionPayload?.book) {
         paintRange(rangePayload);
         return;
       }
       board.innerHTML = `<p class="hint">Reading the 52-week high and low for the F&O book…</p>`;
       statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the 52-week range…";
       try {
-        const response = await fetch(fresh ? "/api/range?fresh=1" : "/api/range", { signal: AbortSignal.timeout(90000) });
-        const payload = await response.json();
+        const [payload, directionResult] = await Promise.all([
+          loadJson("/api/range", fresh),
+          loadJson("/api/direction", fresh),
+        ]);
         if (token !== viewToken) return;
-        if (!response.ok || payload.ok === false) {
-          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The 52-week range did not load.")}</p>`;
-          return;
-        }
+        directionPayload = directionResult;
         statusEl.innerHTML = "<strong>Desk ready</strong><br />52-week range is loaded. Open a name for the full board.";
         paintRange(payload);
       } catch (error) {

@@ -9,7 +9,7 @@ const IST_MS = 5.5 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export const DIRECTION_RULE = 2;
+export const DIRECTION_RULE = 3;
 
 export type DirectionReading = "New shorts" | "New longs" | "Longs leaving" | "Shorts covering" | "Flat";
 
@@ -33,6 +33,16 @@ export type DirectionRow = {
   longDays: number;
 };
 
+export type FuturesLatest = {
+  symbol: string;
+  name: string;
+  sector: string;
+  close: number;
+  priceChange: number;
+  oiChangePercent: number;
+  reading: DirectionReading;
+};
+
 export type DirectionReport = {
   ok: true;
   ready: true;
@@ -42,6 +52,7 @@ export type DirectionReport = {
   shorts: DirectionRow[];
   longs: DirectionRow[];
   gate: { shorts: DirectionRow[]; longs: DirectionRow[] };
+  book: FuturesLatest[];
   note: string;
 };
 
@@ -241,6 +252,18 @@ export async function directionReport(now = new Date()): Promise<DirectionReport
         shorts: shorts.filter((row) => row.shortDays >= 2).slice(0, 3),
         longs: longs.filter((row) => row.longDays >= 2).slice(0, 3),
       },
+      book: rows.map((row) => {
+        const day = row.days[row.days.length - 1];
+        return {
+          symbol: row.symbol,
+          name: row.name,
+          sector: row.sector,
+          close: row.close,
+          priceChange: day.priceChange,
+          oiChangePercent: day.oiChangePercent,
+          reading: day.reading,
+        };
+      }),
       note: "New shorts is a lower close with futures open interest up. New longs is a higher close with futures open interest up. The percent next to the close is versus the previous session. The open-interest percent is the combined change in the near month and the next month, versus the previous book. One session is a print. Two or three sessions in the same reading is the direction. These labels are a research brief, not an order.",
     };
   } catch (error) {
