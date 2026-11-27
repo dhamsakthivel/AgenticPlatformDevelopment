@@ -1,0 +1,600 @@
+// Local research desk. It serves the page and proxies to this agent.
+import { spawn } from "node:child_process";
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import ts from "typescript";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const projectDir = path.resolve(here, "..");
+const publicDir = path.join(here, "public");
+const deskPort = Number(process.env.DESK_PORT || 4173);
+const agentPort = Number(process.env.AGENT_PORT || 3921);
+const agentUrl = (process.env.AGENT_URL || `http://127.0.0.1:${agentPort}`).replace(/\/$/, "");
+
+let agentChild = null;
+let agentLog = "";
+const modules = new Map();
+
+function moduleFile(rel) {
+  return path.join(here, ".cache", rel.replace(/[\\/]/g, "_").replace(/\.ts$/, ".mjs"));
+}
+
+async function loadModule(rel) {
+  const cached = modules.get(rel);
+  if (cached) return cached;
+  const sourcePath = path.join(projectDir, rel);
+  const source = readFileSync(sourcePath, "utf8");
+  let js = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
+    fileName: sourcePath,
+  }).outputText;
+  const specs = [...js.matchAll(/from\s+["'](\.\/[^"']+)["']/g)].map((match) => match[1]);
+  for (const spec of specs) {
+    const depRel = path.posix.normalize(path.posix.join(path.posix.dirname(rel), spec));
+    const dep = depRel.endsWith(".ts") ? depRel : `${depRel.replace(/\.js$/, "")}.ts`;
+    await loadModule(dep);
+    const href = pathToFileURL(moduleFile(dep)).href;
+    js = js.replaceAll(`"${spec}"`, JSON.stringify(href)).replaceAll(`'${spec}'`, JSON.stringify(href));
+  }
+  const file = moduleFile(rel);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, js);
+  const loaded = await import(pathToFileURL(file).href);
+  modules.set(rel, loaded);
+  return loaded;
+}
+
+function sendJson(res, status, body) {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "content-length": Buffer.byteLength(payload),
+  });
+  res.end(payload);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > 32_000) {
+        reject(Object.assign(new Error("Body is too large."), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      if (!raw) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(Object.assign(new Error("Send a JSON object."), { status: 400 }));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+async function agentReachable() {
+  try {
+    const response = await fetch(`${agentUrl}/v1/info`, { signal: AbortSignal.timeout(1500) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureAgent() {
+  if (await agentReachable()) return;
+  if (process.env.AGENT_URL) {
+    throw new Error(`The agent at ${agentUrl} is not responding.`);
+  }
+  if (agentChild) return waitForAgent();
+  const cli = path.join(projectDir, "node_modules", "@grok/agent-sdk", "dist", "bin", "agent-serve.js");
+  const command = existsSync(cli) ? process.execPath : "npx";
+  const args = existsSync(cli)
+    ? [cli]
+    : ["--yes", "@grok/agent-sdk@0.6.0"];
+  args.push(
+    "serve",
+    "--dir",
+    projectDir,
+    "--mode",
+    "single",
+    "--dev",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(agentPort),
+    "--no-playground",
+    "--no-docs",
+  );
+  let spawnError = null;
+  agentChild = spawn(command, args, {
+    cwd: projectDir,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+    windowsHide: true,
+  });
+  const remember = (chunk) => {
+    agentLog = (agentLog + chunk.toString()).slice(-2000);
+  };
+  agentChild.stdout.on("data", remember);
+  agentChild.stderr.on("data", remember);
+  agentChild.on("error", (error) => {
+    spawnError = error;
+    agentLog = (agentLog + "\n" + error.message).slice(-2000);
+    agentChild = null;
+  });
+  agentChild.on("exit", () => {
+    agentChild = null;
+  });
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (spawnError) throw new Error(`The agent did not start. ${spawnError.message}`);
+    if (await agentReachable()) return;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  throw new Error(`The agent did not open its HTTP port in time. ${agentLog.trim()}`.trim());
+}
+
+async function waitForAgent() {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (!agentChild && agentLog) {
+      throw new Error(`The agent did not start. ${agentLog.trim()}`);
+    }
+    if (await agentReachable()) return;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  throw new Error(`The agent did not open its HTTP port in time. ${agentLog.trim()}`.trim());
+}
+
+async function proxyStream(req, res, sessionId, startIndex) {
+  const upstream = await fetch(
+    `${agentUrl}/v1/session/${encodeURIComponent(sessionId)}/stream?startIndex=${startIndex}`,
+    { headers: { accept: "application/x-ndjson" } },
+  );
+  res.writeHead(upstream.status, {
+    "content-type": "application/x-ndjson; charset=utf-8",
+    "cache-control": "no-cache",
+  });
+  if (!upstream.body) {
+    res.end();
+    return;
+  }
+  const reader = upstream.body.getReader();
+  req.on("close", () => {
+    reader.cancel().catch(() => {});
+  });
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!res.write(Buffer.from(value))) {
+      await new Promise((resolve) => res.once("drain", resolve));
+    }
+  }
+  res.end();
+}
+
+const server = createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      createReadStream(path.join(publicDir, "index.html")).pipe(res);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/health") {
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/scan") {
+      const chain = await loadModule("bot/lib/optionchain.ts");
+      const scan = await chain.oiPatternScan(url.searchParams.get("fresh") === "1");
+      sendJson(res, scan.ok === false ? 502 : 200, scan);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/morning") {
+      const morning = await loadModule("bot/lib/morning.ts");
+      const nextRunLabel = morning.morningLabel(morning.nextMorningAt(new Date()));
+      if (url.searchParams.get("fresh") === "1") {
+        const report = await runMorning();
+        sendJson(res, report.ok === false ? 502 : 200, { ...report, nextRunLabel });
+        return;
+      }
+      const saved = readMorning();
+      if (!saved) {
+        sendJson(res, 200, {
+          ok: true,
+          ready: false,
+          nextRunLabel,
+          note: "The morning brief runs at 08:45 IST on weekdays, before the pre-open. It stays on this desk after that.",
+        });
+        return;
+      }
+      sendJson(res, 200, { ...saved, nextRunLabel });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/direction") {
+      if (url.searchParams.get("fresh") === "1") {
+        const report = await runDirection();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      const saved = readDirection();
+      const direction = await loadModule("bot/lib/direction.ts");
+      if (!saved || saved.ruleVersion !== direction.DIRECTION_RULE || saved.sessions?.at(-1) !== direction.expectedSession(new Date())) {
+        const report = await runDirection();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      sendJson(res, 200, saved);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/range") {
+      if (url.searchParams.get("fresh") === "1") {
+        const report = await runRange();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      const saved = readRange();
+      const range = await loadModule("bot/lib/range.ts");
+      if (!saved || saved.ruleVersion !== range.RANGE_RULE || rangeStale(saved)) {
+        const report = await runRange();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      sendJson(res, 200, saved);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/preopen") {
+      const preopen = await loadModule("bot/lib/preopen.ts");
+      const nextRunLabel = preopen.premarketLabel(preopen.nextPremarketAt(new Date()));
+      if (url.searchParams.get("fresh") === "1") {
+        const scan = await runPremarket();
+        sendJson(res, scan.ok === false ? 502 : 200, { ...scan, nextRunLabel });
+        return;
+      }
+      const saved = readPremarket();
+      if (!saved) {
+        sendJson(res, 200, {
+          ok: true,
+          ready: false,
+          nextRunLabel,
+          note: "The premarket scan runs at 09:10 IST on weekdays. The result stays on this desk after that.",
+        });
+        return;
+      }
+      sendJson(res, 200, { ...saved, nextRunLabel });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/research") {
+      const body = await readBody(req);
+      const symbol = typeof body.symbol === "string" ? body.symbol.trim() : "";
+      if (!symbol) {
+        sendJson(res, 400, { ok: false, error: "Enter a symbol." });
+        return;
+      }
+      const market = await loadModule("bot/lib/market.ts");
+      const moneycontrol = await loadModule("bot/lib/moneycontrol.ts");
+      const stage = await loadModule("bot/lib/stage2.ts");
+      const chain = await loadModule("bot/lib/optionchain.ts");
+      const volume = await loadModule("bot/lib/volume.ts");
+      const resolved = market.resolveSymbol(symbol);
+      const briefPromise = "ok" in resolved
+        ? Promise.resolve(resolved)
+        : resolved.kind === "index"
+          ? Promise.resolve({
+              ok: true,
+              applicable: false,
+              symbol: resolved.input,
+              reason: "An index does not have company news, bulk deals, or large deals. Ask for an NSE stock symbol.",
+            })
+          : moneycontrol.companyBrief(resolved.input);
+      const screenPromise = "ok" in resolved
+        ? Promise.resolve(resolved)
+        : stage.stageScreenFor(resolved);
+      const chainPromise = "ok" in resolved
+        ? Promise.resolve(resolved)
+        : chain.optionChainFor(resolved);
+      const volumePromise = volume.volumeDecision(symbol);
+      const [technicals, results, brief, screen, optionChain, volumeReport] = await Promise.all([
+        market.marketTechnicals(symbol),
+        market.publishedResults(symbol),
+        briefPromise,
+        screenPromise,
+        chainPromise,
+        volumePromise,
+      ]);
+      sendJson(res, 200, {
+        ok: true,
+        market: { result: technicals },
+        results: { result: results },
+        brief,
+        screen,
+        optionChain,
+        volume: volumeReport,
+      });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/session") {
+      await ensureAgent();
+      const body = await readBody(req);
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      if (!message) {
+        sendJson(res, 400, { ok: false, error: "Enter a question." });
+        return;
+      }
+      const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+      const target = sessionId
+        ? `${agentUrl}/v1/session/${encodeURIComponent(sessionId)}`
+        : `${agentUrl}/v1/session`;
+      const payload = { message };
+      if (typeof body.continuationToken === "string" && body.continuationToken) {
+        payload.continuationToken = body.continuationToken;
+      }
+      const response = await fetch(target, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(120_000),
+      });
+      const text = await response.text();
+      res.writeHead(response.status, {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+      });
+      res.end(text);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/stream") {
+      await ensureAgent();
+      const sessionId = url.searchParams.get("sessionId") || "";
+      const startIndex = url.searchParams.get("startIndex") || "0";
+      if (!/^ses_[A-Za-z0-9_-]+$/.test(sessionId)) {
+        sendJson(res, 400, { ok: false, error: "Missing session." });
+        return;
+      }
+      if (!/^\d+$/.test(startIndex)) {
+        sendJson(res, 400, { ok: false, error: "Bad start index." });
+        return;
+      }
+      await proxyStream(req, res, sessionId, startIndex);
+      return;
+    }
+    sendJson(res, 404, { ok: false, error: "Not found." });
+  } catch (error) {
+    const status = error && typeof error.status === "number" ? error.status : 502;
+    sendJson(res, status, { ok: false, error: error instanceof Error ? error.message : "Desk request failed." });
+  }
+});
+
+const premarketFile = path.join(here, ".cache", "preopen-latest.json");
+let premarketRun = null;
+
+function readPremarket() {
+  try {
+    return JSON.parse(readFileSync(premarketFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writePremarket(body) {
+  mkdirSync(path.dirname(premarketFile), { recursive: true });
+  writeFileSync(premarketFile, JSON.stringify(body));
+}
+
+async function runPremarket() {
+  if (premarketRun) return premarketRun;
+  premarketRun = (async () => {
+    const preopen = await loadModule("bot/lib/preopen.ts");
+    const scan = await preopen.premarketScan();
+    if (scan.ok) writePremarket({ ...scan, savedAt: new Date().toISOString() });
+    return scan;
+  })().finally(() => {
+    premarketRun = null;
+  });
+  return premarketRun;
+}
+
+function armPremarket(preopen) {
+  const next = preopen.nextPremarketAt(new Date());
+  const wait = Math.max(1000, next.getTime() - Date.now());
+  console.log(`Premarket scan  ${preopen.premarketLabel(next)}`);
+  setTimeout(() => {
+    runPremarket()
+      .then((scan) => {
+        if (scan.ok) console.log(`Premarket saved  ${scan.sessionLabel} ${scan.asOf || ""}`.trim());
+        else console.log(`Premarket scan failed. ${scan.error}`);
+      })
+      .catch((error) => {
+        console.log(`Premarket scan failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      })
+      .finally(() => armPremarket(preopen));
+  }, wait);
+}
+
+async function startPremarket() {
+  const preopen = await loadModule("bot/lib/preopen.ts");
+  const saved = readPremarket();
+  const today = preopen.istDateKey(new Date());
+  if (preopen.premarketDue(new Date()) && (saved?.sessionDate !== today || saved?.ruleVersion !== preopen.PREMARKET_RULE)) {
+    runPremarket()
+      .then((scan) => {
+        if (scan.ok) console.log(`Premarket saved  ${scan.sessionLabel} ${scan.asOf || ""}`.trim());
+        else console.log(`Premarket scan failed. ${scan.error}`);
+      })
+      .catch((error) => {
+        console.log(`Premarket scan failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      });
+  }
+  armPremarket(preopen);
+}
+
+const morningFile = path.join(here, ".cache", "morning-latest.json");
+let morningRun = null;
+
+function readMorning() {
+  try {
+    return JSON.parse(readFileSync(morningFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeMorning(body) {
+  mkdirSync(path.dirname(morningFile), { recursive: true });
+  writeFileSync(morningFile, JSON.stringify(body));
+}
+
+async function runMorning() {
+  if (morningRun) return morningRun;
+  morningRun = (async () => {
+    const morning = await loadModule("bot/lib/morning.ts");
+    const report = await morning.morningReport();
+    if (report.ok) writeMorning({ ...report, savedAt: new Date().toISOString() });
+    return report;
+  })().finally(() => {
+    morningRun = null;
+  });
+  return morningRun;
+}
+
+const rangeFile = path.join(here, ".cache", "range-latest.json");
+let rangeRun = null;
+
+function readRange() {
+  try {
+    return JSON.parse(readFileSync(rangeFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeRange(body) {
+  mkdirSync(path.dirname(rangeFile), { recursive: true });
+  writeFileSync(rangeFile, JSON.stringify(body));
+}
+
+function rangeStale(saved) {
+  const built = Date.parse(saved.builtAt);
+  return !Number.isFinite(built) || Date.now() - built > 6 * 60 * 60 * 1000;
+}
+
+async function runRange() {
+  if (rangeRun) return rangeRun;
+  rangeRun = (async () => {
+    const range = await loadModule("bot/lib/range.ts");
+    const report = await range.yearRangeReport();
+    if (report.ok) writeRange({ ...report, savedAt: new Date().toISOString() });
+    return report;
+  })().finally(() => {
+    rangeRun = null;
+  });
+  return rangeRun;
+}
+
+const directionFile = path.join(here, ".cache", "direction-latest.json");
+let directionRun = null;
+
+function readDirection() {
+  try {
+    return JSON.parse(readFileSync(directionFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeDirection(body) {
+  mkdirSync(path.dirname(directionFile), { recursive: true });
+  writeFileSync(directionFile, JSON.stringify(body));
+}
+
+async function runDirection() {
+  if (directionRun) return directionRun;
+  directionRun = (async () => {
+    const direction = await loadModule("bot/lib/direction.ts");
+    const report = await direction.directionReport();
+    if (report.ok) writeDirection({ ...report, savedAt: new Date().toISOString() });
+    return report;
+  })().finally(() => {
+    directionRun = null;
+  });
+  return directionRun;
+}
+
+function morningStale(morning, saved, now = new Date()) {
+  if (!saved || saved.ruleVersion !== morning.MORNING_RULE) return true;
+  if (saved.briefingKey !== morning.briefingKey(now)) return true;
+  const slot = morning.briefingSlot(now).getTime();
+  return now.getTime() >= slot && Date.parse(saved.builtAt) < slot;
+}
+
+function armMorning(morning) {
+  const next = morning.nextMorningAt(new Date());
+  const wait = Math.max(1000, next.getTime() - Date.now());
+  console.log(`Morning brief  ${morning.morningLabel(next)}`);
+  setTimeout(() => {
+    runMorning()
+      .then((report) => {
+        if (report.ok) console.log(`Morning brief saved  ${report.briefingLabel}`);
+        else console.log(`Morning brief failed. ${report.error}`);
+      })
+      .catch((error) => {
+        console.log(`Morning brief failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      })
+      .finally(() => armMorning(morning));
+  }, wait);
+}
+
+async function startMorning() {
+  const morning = await loadModule("bot/lib/morning.ts");
+  const saved = readMorning();
+  if (morningStale(morning, saved)) {
+    runMorning()
+      .then((report) => {
+        if (report.ok) console.log(`Morning brief saved  ${report.briefingLabel}`);
+        else console.log(`Morning brief failed. ${report.error}`);
+      })
+      .catch((error) => {
+        console.log(`Morning brief failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+      });
+  }
+  armMorning(morning);
+}
+
+function stopAgent() {
+  if (agentChild && !agentChild.killed) agentChild.kill("SIGTERM");
+}
+
+process.on("SIGINT", () => {
+  stopAgent();
+  process.exit(0);
+});
+process.on("SIGTERM", () => {
+  stopAgent();
+  process.exit(0);
+});
+
+server.listen(deskPort, "127.0.0.1", () => {
+  console.log(`NSE F&O desk  http://127.0.0.1:${deskPort}`);
+  console.log(`Agent         ${agentUrl}`);
+  startPremarket().catch((error) => {
+    console.log(`Premarket schedule failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+  startMorning().catch((error) => {
+    console.log(`Morning schedule failed. ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+});
