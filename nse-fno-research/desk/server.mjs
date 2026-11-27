@@ -242,6 +242,22 @@ const server = createServer(async (req, res) => {
       sendJson(res, 200, saved);
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/range") {
+      if (url.searchParams.get("fresh") === "1") {
+        const report = await runRange();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      const saved = readRange();
+      const range = await loadModule("bot/lib/range.ts");
+      if (!saved || saved.ruleVersion !== range.RANGE_RULE || rangeStale(saved)) {
+        const report = await runRange();
+        sendJson(res, report.ok === false ? 502 : 200, report);
+        return;
+      }
+      sendJson(res, 200, saved);
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/preopen") {
       const preopen = await loadModule("bot/lib/preopen.ts");
       const nextRunLabel = preopen.premarketLabel(preopen.nextPremarketAt(new Date()));
@@ -450,6 +466,40 @@ async function runMorning() {
     morningRun = null;
   });
   return morningRun;
+}
+
+const rangeFile = path.join(here, ".cache", "range-latest.json");
+let rangeRun = null;
+
+function readRange() {
+  try {
+    return JSON.parse(readFileSync(rangeFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeRange(body) {
+  mkdirSync(path.dirname(rangeFile), { recursive: true });
+  writeFileSync(rangeFile, JSON.stringify(body));
+}
+
+function rangeStale(saved) {
+  const built = Date.parse(saved.builtAt);
+  return !Number.isFinite(built) || Date.now() - built > 6 * 60 * 60 * 1000;
+}
+
+async function runRange() {
+  if (rangeRun) return rangeRun;
+  rangeRun = (async () => {
+    const range = await loadModule("bot/lib/range.ts");
+    const report = await range.yearRangeReport();
+    if (report.ok) writeRange({ ...report, savedAt: new Date().toISOString() });
+    return report;
+  })().finally(() => {
+    rangeRun = null;
+  });
+  return rangeRun;
 }
 
 const directionFile = path.join(here, ".cache", "direction-latest.json");

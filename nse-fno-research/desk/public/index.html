@@ -193,6 +193,7 @@
         <button type="button" class="secondary" id="morning">Morning</button>
         <button type="button" class="secondary" id="direction">Direction</button>
         <button type="button" class="secondary" id="premarket">Premarket</button>
+        <button type="button" class="secondary" id="range">52-week</button>
       </div>
       <div class="chips" id="chips"></div>
       <form id="ask-form" class="ask">
@@ -309,6 +310,7 @@
     let morningPayload = null;
     let directionPayload = null;
     let premarketPayload = null;
+    let rangePayload = null;
     let viewToken = 0;
     function premarketTable(title, rows) {
       const body = (rows || []).map((row, index) => `
@@ -575,6 +577,73 @@
       } catch (error) {
         if (token !== viewToken) return;
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The futures direction did not answer in time." : (error.message || "The futures direction did not answer."))}</p>`;
+      }
+    }
+    function rangeRows(rows) {
+      const body = (rows || []).map((row) => `
+        <tr>
+          <td><button type="button" class="link" data-symbol="${escapeHtml(row.symbol)}">${escapeHtml(row.symbol)}</button><div class="hint">${escapeHtml(row.name || "")}</div></td>
+          <td>${escapeHtml(row.sector || "")}</td>
+          <td>${num(row.price)}</td>
+          <td>${num(row.low)}</td>
+          <td>${num(row.high)}</td>
+          <td class="${changeClass(row.fromLow)}">${signed(row.fromLow)}%</td>
+          <td class="${changeClass(row.fromHigh)}">${signed(row.fromHigh)}%</td>
+        </tr>`).join("");
+      return body || "<tr><td colspan='7'>None in this book.</td></tr>";
+    }
+    function paintRange(report) {
+      rangePayload = report;
+      board.innerHTML = `
+        <div class="head">
+          <div>
+            <h2 class="name">52-week range</h2>
+            <p class="sub">${num((report.rows || []).length, 0)} of ${num(report.scanned, 0)} F&O names · ${escapeHtml(report.asOf || "time unavailable")}</p>
+          </div>
+          <button type="button" class="secondary" id="refresh-range">Refresh</button>
+        </div>
+        <p class="hint">${escapeHtml(report.note || "")}</p>
+        <div class="row" style="margin-top: 12px;">
+          <input id="range-find" type="text" placeholder="Find a name" autocomplete="off" maxlength="32" />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Symbol</th><th>Sector</th><th>Last</th><th>52-week low</th><th>52-week high</th><th>From low</th><th>From high</th></tr></thead>
+            <tbody id="range-body">${rangeRows(report.rows)}</tbody>
+          </table>
+        </div>
+        ${report.missed ? `<p class="hint">${num(report.missed, 0)} names did not return a 52-week high and low.</p>` : ""}`;
+      board.querySelector("#refresh-range")?.addEventListener("click", () => loadRange(true));
+      board.querySelector("#range-find")?.addEventListener("input", (event) => {
+        const query = event.target.value.trim().toUpperCase();
+        const rows = (report.rows || []).filter((row) => !query || `${row.symbol} ${row.name} ${row.sector}`.toUpperCase().includes(query));
+        const body = board.querySelector("#range-body");
+        if (body) body.innerHTML = rangeRows(rows);
+        wireSymbols();
+      });
+      wireSymbols();
+    }
+    async function loadRange(fresh) {
+      const token = ++viewToken;
+      if (!fresh && rangePayload?.rows) {
+        paintRange(rangePayload);
+        return;
+      }
+      board.innerHTML = `<p class="hint">Reading the 52-week high and low for the F&O book…</p>`;
+      statusEl.innerHTML = "<strong>Desk ready</strong><br />Loading the 52-week range…";
+      try {
+        const response = await fetch(fresh ? "/api/range?fresh=1" : "/api/range", { signal: AbortSignal.timeout(90000) });
+        const payload = await response.json();
+        if (token !== viewToken) return;
+        if (!response.ok || payload.ok === false) {
+          board.innerHTML = `<p class="error">${escapeHtml(payload.error || "The 52-week range did not load.")}</p>`;
+          return;
+        }
+        statusEl.innerHTML = "<strong>Desk ready</strong><br />52-week range is loaded. Open a name for the full board.";
+        paintRange(payload);
+      } catch (error) {
+        if (token !== viewToken) return;
+        board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The 52-week range did not answer in time." : (error.message || "The 52-week range did not answer."))}</p>`;
       }
     }
     async function loadPremarket(fresh) {
@@ -1026,6 +1095,7 @@
     document.querySelector("#morning").addEventListener("click", () => loadMorning(false));
     document.querySelector("#direction").addEventListener("click", () => loadDirection(false));
     document.querySelector("#premarket").addEventListener("click", () => loadPremarket(false));
+    document.querySelector("#range").addEventListener("click", () => loadRange(false));
     loadGate(false);
   </script>
 </body>
