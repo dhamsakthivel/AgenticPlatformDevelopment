@@ -760,6 +760,7 @@
     async function loadSymbol(raw) {
       const symbol = raw.trim();
       if (!symbol) return;
+      const token = ++viewToken;
       symbolInput.value = symbol.toUpperCase();
       board.innerHTML = `<p class="hint">Loading ${escapeHtml(symbolInput.value)}…</p>`;
       try {
@@ -770,13 +771,15 @@
           signal: AbortSignal.timeout(45000),
         });
         const payload = await response.json();
+        if (token !== viewToken) return;
         if (!response.ok || !payload.ok) {
           board.innerHTML = `<p class="error">${escapeHtml(payload.error || "Research did not load.")}</p>`;
           return;
         }
         statusEl.innerHTML = "<strong>Desk ready</strong><br />Figures, Stage 2, open interest, news, and deals are loaded.";
-        paint(payload.market?.result, payload.results?.result, payload.brief, payload.screen, payload.optionChain);
+        paint(payload.market?.result, payload.results?.result, payload.brief, payload.screen, payload.optionChain, payload.volume);
       } catch (error) {
+        if (token !== viewToken) return;
         board.innerHTML = `<p class="error">${escapeHtml(error.name === "TimeoutError" ? "The quote feed did not answer in time." : (error.message || "The desk did not answer."))}</p>`;
       }
     }
@@ -983,7 +986,37 @@
         </table>
         <p class="hint">${escapeHtml(levels.note || "")}</p>`;
     }
-    function paint(market, results, brief, screen, optionChain) {
+    function volumeBlock(volume) {
+      if (!volume) return "";
+      if (volume.ok === false) return `<h2>10-minute volume</h2><p class="error">${escapeHtml(volume.error || "The volume section did not load.")}</p>`;
+      if (!volume.applicable) return `<h2>10-minute volume</h2><p>${escapeHtml(volume.reason || "Not used for this symbol.")}</p>`;
+      const lead = [...(volume.candles || [])].reverse().find((candle) => candle.decision === "Buy" || candle.decision === "Sell") || volume.candles?.[volume.candles.length - 1];
+      const tone = volume.decision === "Buy" ? "up" : volume.decision === "Sell" ? "down" : "range";
+      const rows = (volume.candles || []).map((candle) => `
+        <tr>
+          <td>${escapeHtml(candle.time || "")}</td>
+          <td>${num(candle.open)} → ${num(candle.close)}</td>
+          <td>${num(candle.volumeMultiple, 1)}×</td>
+          <td class="${candle.side === "Buy" ? "up" : candle.side === "Sell" ? "down" : ""}">${escapeHtml(candle.side || "")}</td>
+          <td>${candle.followUp ? "Yes" : "No"}<div class="hint">${escapeHtml(candle.followUpDetail || "")}</div></td>
+          <td>${escapeHtml(candle.oi || "")}<div class="hint">${escapeHtml(candle.oiDetail || "")}</div></td>
+          <td class="${candle.decision === "Buy" ? "up" : candle.decision === "Sell" ? "down" : ""}"><b>${escapeHtml(candle.decision || "")}</b><div class="hint">${escapeHtml(candle.reason || "")}</div></td>
+        </tr>`).join("");
+      return `
+        <h2>10-minute volume</h2>
+        <div class="head">
+          <p>${escapeHtml(lead?.reason || "No very high volume 10-minute candle in the last five sessions.")}</p>
+          <div class="bias ${tone}">${escapeHtml(volume.decision || "None")}</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Candle</th><th>Open to close</th><th>Volume</th><th>Close</th><th>Follow-up</th><th>Futures OI</th><th>Decision</th></tr></thead>
+            <tbody>${rows || "<tr><td colspan='7'>None in the last five sessions.</td></tr>"}</tbody>
+          </table>
+        </div>
+        <p class="hint">${escapeHtml(volume.note || "")}</p>`;
+    }
+    function paint(market, results, brief, screen, optionChain, volume) {
       if (!market || market.ok === false) {
         board.innerHTML = `<p class="error">${escapeHtml(market?.error || "No technicals.")}</p>`;
         return;
@@ -1049,6 +1082,7 @@
         <p class="price">${num(market.price)} <span class="${changeClass(change)}">${signed(change)}% today</span></p>
         <p class="sub">${escapeHtml(market.trendDetail || "")}</p>
         ${market.corporateAction ? `<p class="banner">${escapeHtml(market.corporateAction)}</p>` : ""}
+        ${volumeBlock(volume)}
         ${dayLevelsBlock(market.dayLevels)}
         <div class="metrics">
           <div class="metric"><span>SMA 20</span><b>${num(market.sma20)}</b></div>
